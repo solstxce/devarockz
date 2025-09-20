@@ -4,9 +4,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AuctionCard } from '@/components/auction/AuctionCard'
 import { SearchFilters, type SearchFilters as SearchFiltersType } from '@/components/auction/SearchFilters'
+import { AuthPromptModal } from '@/components/auth/AuthPromptModal'
 import { auctionService, type AuctionFilters } from '@/services/auctionService'
 import { categoryService } from '@/services/categoryService'
 import { useRealTime } from '@/hooks/useRealTime'
+import { useAuth } from '@/hooks/useAuth'
+import { useAuthModal } from '@/hooks/useAuthModal'
 import type { Auction, Category } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 
@@ -17,8 +20,10 @@ export function AuctionBrowsePage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [searchFilters, setSearchFilters] = useState<AuctionFilters>({})
   
-  // Initialize real-time connection
+  // Initialize hooks
   const { subscribe, unsubscribe } = useRealTime()
+  const { user } = useAuth()
+  const { authModal, openAuthModal, closeAuthModal } = useAuthModal()
 
   // Fetch initial data
   useEffect(() => {
@@ -120,14 +125,25 @@ export function AuctionBrowsePage() {
   }
 
   const handleBidClick = (auction: Auction) => {
+    if (!user) {
+      openAuthModal('bid', auction.title)
+      return
+    }
     // Navigate to auction detail page or open bid modal
     console.log('Bid on auction:', auction.id)
+    toast.success(`Bidding on ${auction.title}`)
     // You can add navigation logic here
   }
 
   const handleWatchlistToggle = (auctionId: string) => {
+    if (!user) {
+      const auction = auctions.find(a => a.id === auctionId)
+      openAuthModal('watchlist', auction?.title)
+      return
+    }
     // Toggle watchlist status
     console.log('Toggle watchlist for auction:', auctionId)
+    toast.success('Added to watchlist')
     // You can implement watchlist functionality here
   }
 
@@ -230,6 +246,14 @@ export function AuctionBrowsePage() {
           </div>
         )}
       </div>
+
+      {/* Authentication Prompt Modal */}
+      <AuthPromptModal
+        isOpen={authModal.isOpen}
+        onClose={closeAuthModal}
+        action={authModal.action}
+        auctionTitle={authModal.auctionTitle}
+      />
     </div>
   )
 }
