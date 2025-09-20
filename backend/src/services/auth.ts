@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
 import { supabase, supabaseAdmin } from './database'
 import type { User, LoginRequest, SignupRequest, JwtPayload } from '@/types'
 
@@ -48,60 +49,67 @@ export class AuthService {
   async signUp(userData: SignupRequest): Promise<{ user: User; token: string }> {
     const { email, password, full_name, role = 'bidder' } = userData
 
-    // Check if user already exists
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .single()
-
-    if (existingUser) {
-      throw new Error('User already exists with this email')
-    }
-
-    // Create user in Supabase Auth
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name, role }
-    })
-
-    if (authError || !authData.user) {
-      throw new Error(authError?.message || 'Failed to create user')
-    }
-
-    // Create user profile
-    const { data: user, error: profileError } = await supabase
-      .from('users')
-      .insert({
-        id: authData.user.id,
+    try {
+      // First, create user with Supabase Auth using admin client
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email,
-        full_name,
-        role,
-        is_verified: true,
-        is_active: true
+        password,
+        email_confirm: true,
+        user_metadata: {
+          full_name,
+          role
+        }
       })
-      .select()
-      .single()
 
-    if (profileError || !user) {
-      // Cleanup auth user if profile creation fails
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
-      throw new Error(profileError?.message || 'Failed to create user profile')
+      if (authError || !authData.user) {
+        throw new Error(authError?.message || 'Failed to create user account')
+      }
+
+      // Wait a bit for auth user to be fully created
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      // Create user profile in public.users table using the auth user ID
+      const { data: user, error: profileError } = await supabaseAdmin
+        .from('users')
+        .insert({
+          id: authData.user.id,
+          email: authData.user.email || email,
+          full_name,
+          role,
+          is_verified: true,
+          is_active: true
+        })
+        .select()
+        .single()
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError)
+        // If profile creation fails, clean up the auth user
+        try {
+          await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+        } catch (cleanupError) {
+          console.error('Failed to cleanup auth user:', cleanupError)
+        }
+        throw new Error(`Failed to create user profile: ${profileError.message}`)
+      }
+
+      if (!user) {
+        throw new Error('Failed to create user profile: No data returned')
+      }
+
+      // Generate token
+      const token = this.generateToken({
+        userId: user.id,
+        email: user.email,
+        role: user.role
+      })
+
+      return { user, token }
+    } catch (error) {
+      console.error('Signup error:', error)
+      throw new Error(error instanceof Error ? error.message : 'Failed to create user account')
     }
-
-    // Generate token
-    const token = this.generateToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role
-    })
-
-    return { user, token }
-  }
-
-  // Sign in user
+  }  // Sign in user
   async signIn(credentials: LoginRequest): Promise<{ user: User; token: string }> {
     const { email, password } = credentials
 
