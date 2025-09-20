@@ -72,7 +72,7 @@ export class AuctionService {
         shipping_cost,
         shipping_methods: pgShippingMethods,
         images: pgImages,
-        status: 'draft'
+        status: 'active'
       })
       .select(`
         *,

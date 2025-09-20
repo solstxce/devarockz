@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useSellerAuth } from '@/hooks/useSellerAuth'
-import { Store, User, Mail, Phone, MapPin, Globe, Star, Shield, Edit, Save, X, Camera, Upload } from 'lucide-react'
+import { Store, MapPin, Globe, Star, Shield, Edit, Save, X, Camera, Upload } from 'lucide-react'
 
 interface BusinessAddress {
   street: string
@@ -34,53 +34,59 @@ interface SellerProfile {
 
 export function SellerProfilePage() {
   const { getSellerUser } = useSellerAuth()
-  const sellerAuth = getSellerUser()
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [profile, setProfile] = useState<SellerProfile | null>(null)
   const [formData, setFormData] = useState<Partial<SellerProfile>>({})
+  const [sellerAuth, setSellerAuth] = useState<ReturnType<typeof getSellerUser>>(null)
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      setLoading(true)
-      try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
+    // Get seller auth state
+    const auth = getSellerUser()
+    setSellerAuth(auth)
+    
+    if (auth) {
+      const fetchProfile = async () => {
+        setLoading(true)
+        try {
+          // Simulate API call
+          await new Promise(resolve => setTimeout(resolve, 500))
 
-        // Mock profile data
-        const mockProfile: SellerProfile = {
-          business_name: sellerAuth?.profile.business_name || 'Premium Auctions',
-          business_type: sellerAuth?.profile.business_type || 'individual',
-          description: 'Specializing in vintage collectibles, antiques, and rare items. With over 10 years of experience in the auction industry, we provide authentic items with detailed provenance.',
-          phone: sellerAuth?.profile.phone || '+1 (555) 123-4567',
-          website: 'https://premiumauctions.com',
-          business_address: sellerAuth?.profile.business_address || {
-            street: '123 Auction Street',
-            city: 'New York',
-            state: 'NY',
-            zip_code: '10001',
-            country: 'United States'
-          },
-          verification_status: sellerAuth?.profile.verification_status || 'verified',
-          profile_image: '/api/placeholder/150/150',
-          cover_image: '/api/placeholder/800/200',
-          rating: 4.8,
-          total_reviews: 156,
-          member_since: sellerAuth?.user.created_at ? new Date(sellerAuth.user.created_at).toLocaleDateString() : '2023'
+          // Mock profile data using actual auth data
+          const mockProfile: SellerProfile = {
+            business_name: auth.profile.business_name || 'Premium Auctions',
+            business_type: auth.profile.business_type || 'individual',
+            description: 'Specializing in vintage collectibles, antiques, and rare items. With over 10 years of experience in the auction industry, we provide authentic items with detailed provenance.',
+            phone: auth.profile.phone || '+1 (555) 123-4567',
+            website: 'https://premiumauctions.com',
+            business_address: auth.profile.business_address || {
+              street: '123 Auction Street',
+              city: 'New York',
+              state: 'NY',
+              zip_code: '10001',
+              country: 'United States'
+            },
+            verification_status: auth.profile.verification_status || 'verified',
+            profile_image: '/api/placeholder/150/150',
+            cover_image: '/api/placeholder/800/200',
+            rating: 4.8,
+            total_reviews: 156,
+            member_since: auth.user.created_at ? new Date(auth.user.created_at).toLocaleDateString() : '2023'
+          }
+
+          setProfile(mockProfile)
+          setFormData(mockProfile)
+        } catch (error) {
+          console.error('Error fetching profile:', error)
+        } finally {
+          setLoading(false)
         }
-
-        setProfile(mockProfile)
-        setFormData(mockProfile)
-      } catch (error) {
-        console.error('Error fetching profile:', error)
-      } finally {
-        setLoading(false)
       }
-    }
 
-    fetchProfile()
-  }, [sellerAuth])
+      fetchProfile()
+    }
+  }, [getSellerUser])
 
   const handleSave = async () => {
     setSaving(true)
@@ -101,7 +107,7 @@ export function SellerProfilePage() {
     setEditing(false)
   }
 
-  const updateFormData = (field: string, value: any) => {
+  const updateFormData = (field: string, value: string | BusinessAddress) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -129,11 +135,12 @@ export function SellerProfilePage() {
     )
   }
 
-  if (!profile) {
+  if (!sellerAuth || !profile) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-600">Profile not found</p>
+          <p className="text-sm text-gray-500 mt-2">Please try refreshing the page</p>
         </div>
       </div>
     )

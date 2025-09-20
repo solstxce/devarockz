@@ -36,17 +36,21 @@ export function AuctionBrowsePage() {
 
         // Try to fetch auctions, but handle gracefully if it fails
         try {
+          console.log('🔍 Fetching auctions with filters:', { status: 'active', ...searchFilters })
           const auctionsResult = await auctionService.getAuctions({ status: 'active', ...searchFilters })
+          console.log('📦 Auctions API response:', auctionsResult)
+          
           if (auctionsResult.success && auctionsResult.data) {
             setAuctions(auctionsResult.data)
+            console.log('✅ Successfully loaded', auctionsResult.data.length, 'auctions')
           } else {
-            console.warn('Auctions API failed:', auctionsResult.error)
+            console.warn('⚠️ Auctions API failed:', auctionsResult.error)
             toast.error('Auction service is currently unavailable. Showing demo data.')
             // Set empty array for now - you could add mock data here
             setAuctions([])
           }
         } catch (auctionError) {
-          console.warn('Auctions API error:', auctionError)
+          console.warn('❌ Auctions API error:', auctionError)
           toast.error('Auction service is currently unavailable. Backend connection successful.')
           setAuctions([])
         }

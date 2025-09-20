@@ -1,16 +1,55 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { useSellerAuth } from '@/hooks/useSellerAuth'
 import { Store, Package, DollarSign, Users, Plus, TrendingUp, Clock, Eye, Star, ArrowUpRight, AlertTriangle } from 'lucide-react'
+import toast from 'react-hot-toast'
+
+interface DashboardListing {
+  id: number
+  title: string
+  currentBid: number
+  bids: number
+  views: number
+  timeLeft: string
+  status: string
+  image: string
+}
+
+interface MonthlyPerformance {
+  month: string
+  sales: number
+  listings: number
+}
+
+interface Notification {
+  id: number
+  type: string
+  message: string
+  time: string
+  read: boolean
+}
+
+interface DashboardData {
+  stats: {
+    activeListings: number
+    totalSales: number
+    customers: number
+    revenue: number
+  }
+  recentListings: DashboardListing[]
+  monthlyPerformance: MonthlyPerformance[]
+  notifications: Notification[]
+}
 
 export function SellerDashboardPage() {
   const { getSellerUser } = useSellerAuth()
   const sellerAuth = getSellerUser()
   const [loading, setLoading] = useState(true)
-  const [dashboardData, setDashboardData] = useState({
+  const [dashboardData, setDashboardData] = useState<DashboardData>({
     stats: {
       activeListings: 0,
       totalSales: 0,
@@ -255,10 +294,12 @@ export function SellerDashboardPage() {
                     </div>
                   </div>
                 ))}
-                <Button variant="outline" className="w-full">
-                  View All Listings
-                  <ArrowUpRight className="w-4 h-4 ml-2" />
-                </Button>
+                <Link to="/seller/listings">
+                  <Button variant="outline" className="w-full">
+                    View All Listings
+                    <ArrowUpRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
               </div>
             </CardContent>
           </Card>
@@ -296,22 +337,34 @@ export function SellerDashboardPage() {
               <div className="border-t pt-4">
                 <h4 className="font-medium mb-3">Quick Actions</h4>
                 <div className="grid grid-cols-2 gap-3">
-                  <Button className="h-16 flex flex-col items-center justify-center space-y-1 text-xs">
-                    <Plus className="w-4 h-4" />
-                    <span>Create Listing</span>
-                  </Button>
-                  <Button variant="outline" className="h-16 flex flex-col items-center justify-center space-y-1 text-xs">
+                  <Link to="/sell">
+                    <Button className="h-16 w-full flex flex-col items-center justify-center space-y-1 text-xs">
+                      <Plus className="w-4 h-4" />
+                      <span>Create Listing</span>
+                    </Button>
+                  </Link>
+                  <Button 
+                    variant="outline" 
+                    className="h-16 flex flex-col items-center justify-center space-y-1 text-xs"
+                    onClick={() => toast('Analytics feature coming soon!')}
+                  >
                     <TrendingUp className="w-4 h-4" />
                     <span>Analytics</span>
                   </Button>
-                  <Button variant="outline" className="h-16 flex flex-col items-center justify-center space-y-1 text-xs">
+                  <Button 
+                    variant="outline" 
+                    className="h-16 flex flex-col items-center justify-center space-y-1 text-xs"
+                    onClick={() => toast('Orders management coming soon!')}
+                  >
                     <Package className="w-4 h-4" />
                     <span>Orders</span>
                   </Button>
-                  <Button variant="outline" className="h-16 flex flex-col items-center justify-center space-y-1 text-xs">
-                    <Store className="w-4 h-4" />
-                    <span>Profile</span>
-                  </Button>
+                  <Link to="/seller/profile">
+                    <Button variant="outline" className="h-16 w-full flex flex-col items-center justify-center space-y-1 text-xs">
+                      <Store className="w-4 h-4" />
+                      <span>Profile</span>
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </CardContent>
@@ -356,7 +409,7 @@ export function SellerDashboardPage() {
               <div className="space-y-4">
                 <h4 className="font-medium">Monthly Trend</h4>
                 <div className="space-y-3">
-                  {dashboardData.monthlyPerformance.map((month, index) => {
+                  {dashboardData.monthlyPerformance.map((month) => {
                     const maxValue = Math.max(...dashboardData.monthlyPerformance.map(m => m.sales))
                     const percentage = (month.sales / maxValue) * 100
                     return (
@@ -426,9 +479,11 @@ export function SellerDashboardPage() {
                   <p className="font-medium">{profile.business_address.country}</p>
                 </div>
                 <div className="mt-4">
-                  <Button variant="outline" size="sm">
-                    Edit Business Information
-                  </Button>
+                  <Link to="/seller/profile">
+                    <Button variant="outline" size="sm">
+                      Edit Business Information
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { sellerAuthService } from '@/services/sellerAuthService'
 
 export function useSellerAuth() {
@@ -28,26 +28,34 @@ export function useSellerAuth() {
     }
   }
 
-  const sellerSignOut = () => {
+  const sellerSignOut = useCallback(() => {
     localStorage.removeItem('seller_token')
     localStorage.removeItem('seller_user')
     localStorage.removeItem('seller_profile')
-  }
+  }, [])
 
-  const getSellerUser = () => {
-    const token = localStorage.getItem('seller_token')
-    const userData = localStorage.getItem('seller_user')
-    const profileData = localStorage.getItem('seller_profile')
+  const getSellerUser = useCallback(() => {
+    try {
+      const token = localStorage.getItem('seller_token')
+      const userData = localStorage.getItem('seller_user')
+      const profileData = localStorage.getItem('seller_profile')
 
-    if (token && userData && profileData) {
-      return {
-        token,
-        user: JSON.parse(userData),
-        profile: JSON.parse(profileData)
+      if (token && userData && profileData) {
+        return {
+          token,
+          user: JSON.parse(userData),
+          profile: JSON.parse(profileData)
+        }
       }
+    } catch (error) {
+      console.error('Error parsing seller auth data:', error)
+      // Clear corrupted data
+      localStorage.removeItem('seller_token')
+      localStorage.removeItem('seller_user')
+      localStorage.removeItem('seller_profile')
     }
     return null
-  }
+  }, [])
 
   return {
     sellerSignIn,
