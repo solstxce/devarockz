@@ -5,11 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AuctionCard } from '@/components/auction/AuctionCard'
 import { SearchFilters, type SearchFilters as SearchFiltersType } from '@/components/auction/SearchFilters'
 import { AuthPromptModal } from '@/components/auth/AuthPromptModal'
+import { AuctionDetailModal } from '@/components/auction/AuctionDetailModal'
+import { BidConfirmationModal } from '@/components/auction/BidConfirmationModal'
 import { auctionService, type AuctionFilters } from '@/services/auctionService'
+import { biddingService } from '@/services/biddingService'
 import { categoryService } from '@/services/categoryService'
 import { useRealTime } from '@/hooks/useRealTime'
 import { useAuth } from '@/hooks/useAuth'
 import { useAuthModal } from '@/hooks/useAuthModal'
+import { useSellerAuth } from '@/hooks/useSellerAuth'
+import { debugAuthState, requireAuth } from '@/utils/authHelpers'
 import type { Auction, Category } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 
@@ -23,7 +28,23 @@ export function AuctionBrowsePage() {
   // Initialize hooks
   const { subscribe, unsubscribe } = useRealTime()
   const { user } = useAuth()
+  const { getSellerUser } = useSellerAuth()
   const { authModal, openAuthModal, closeAuthModal } = useAuthModal()
+  
+  // Modal states
+  const [auctionDetailModal, setAuctionDetailModal] = useState<{
+    isOpen: boolean
+    auction: Auction | null
+  }>({ isOpen: false, auction: null })
+  
+  const [bidConfirmationModal, setBidConfirmationModal] = useState<{
+    isOpen: boolean
+    auction: Auction | null
+  }>({ isOpen: false, auction: null })
+  
+  const [isSubmittingBid, setIsSubmittingBid] = useState(false)
+  
+  const sellerAuth = getSellerUser()
 
   // Fetch initial data
   useEffect(() => {
@@ -82,10 +103,18 @@ export function AuctionBrowsePage() {
       }
     }
 
-    // Subscribe to auction updates
+    // Subscribe to auction updates (including bid updates)
     const handleAuctionUpdate = (...args: unknown[]) => {
       const auction = args[0] as Auction
       setAuctions(prev => prev.map(a => a.id === auction.id ? auction : a))
+      
+      // Show toast for new bids if this is a bid update
+      const existingAuction = auctions.find(a => a.id === auction.id)
+      if (existingAuction && auction.current_bid > existingAuction.current_bid) {
+        toast(`New bid: $${auction.current_bid.toFixed(2)} on ${auction.title}`, {
+          icon: '🔨'
+        })
+      }
     }
 
     // Subscribe to auction end
@@ -95,16 +124,28 @@ export function AuctionBrowsePage() {
       toast(`Auction ended: ${auction.title}`)
     }
 
+    // Subscribe to new bids
+    const handleNewBid = (...args: unknown[]) => {
+      const bidData = args[0] as { auction_id: string; amount: number; auction: Auction }
+      if (bidData.auction) {
+        setAuctions(prev => prev.map(a => 
+          a.id === bidData.auction_id ? bidData.auction : a
+        ))
+      }
+    }
+
     subscribe('auction_created', handleNewAuction)
     subscribe('auction_updated', handleAuctionUpdate)
     subscribe('auction_ended', handleAuctionEnd)
+    subscribe('bid_placed', handleNewBid)
 
     return () => {
       unsubscribe('auction_created')
       unsubscribe('auction_updated')
       unsubscribe('auction_ended')
+      unsubscribe('bid_placed')
     }
-  }, [subscribe, unsubscribe])
+  }, [subscribe, unsubscribe, auctions])
 
   const handleSearch = async (filters: SearchFiltersType) => {
     const auctionFilters: AuctionFilters = {
@@ -120,8 +161,84 @@ export function AuctionBrowsePage() {
     setSearchFilters(auctionFilters)
   }
 
-  const handleResetFilters = () => {
-    setSearchFilters({})
+  const handleAuctionCardClick = (auction: Auction) => {
+    setAuctionDetailModal({ isOpen: true, auction })
+  }
+  
+  const handleAuctionDetailBidClick = (auction: Auction) => {
+    if (!user) {
+      openAuthModal('bid', auction.title)
+      return
+    }
+    
+    // Check if user is a seller trying to bid on their own auction
+    if (sellerAuth && auction.seller_id === sellerAuth.user.id) {
+      toast.error('Sellers cannot bid on their own auctions')
+      return
+    }
+    
+    // Close detail modal and open bid confirmation
+    setAuctionDetailModal({ isOpen: false, auction: null })
+    setBidConfirmationModal({ isOpen: true, auction })
+  }
+  
+  const handleConfirmBid = async (bidAmount: number) => {
+    if (!bidConfirmationModal.auction || !user) {
+      toast.error('Please sign in to place a bid')
+      return
+    }
+    
+    // Check authentication with detailed debugging
+    if (!requireAuth('place a bid')) {
+      debugAuthState()
+      return
+    }
+    
+    setIsSubmittingBid(true)
+    try {      
+      console.log('[Bid] Attempting to place bid:', {
+        auctionId: bidConfirmationModal.auction.id,
+        amount: bidAmount,
+        user: user?.email
+      })
+      
+      // Add auth state debugging
+      debugAuthState()
+      
+      // Submit bid to backend
+      const bidResult = await biddingService.placeBid({
+        auctionId: bidConfirmationModal.auction.id,
+        amount: bidAmount
+      })
+      
+      if (bidResult.success && bidResult.data) {
+        // Update the auction's current bid locally (real-time will handle this properly)
+        setAuctions(prev => prev.map(auction => 
+          auction.id === bidConfirmationModal.auction!.id 
+            ? { ...auction, current_bid: bidAmount, total_bids: auction.total_bids + 1 }
+            : auction
+        ))
+        
+        toast.success(`Bid of $${bidAmount.toFixed(2)} placed successfully!`)
+        setBidConfirmationModal({ isOpen: false, auction: null })
+      } else {
+        throw new Error(bidResult.error || 'Failed to place bid')
+      }
+      
+    } catch (error) {
+      console.error('Bid placement error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to place bid. Please try again.'
+      
+      if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+        toast.error('Session expired. Please sign in again.')
+      } else if (errorMessage.includes('403')) {
+        toast.error('You do not have permission to bid on this auction.')
+      } else {
+        toast.error(errorMessage)
+      }
+    } finally {
+      setIsSubmittingBid(false)
+    }
   }
 
   const handleBidClick = (auction: Auction) => {
@@ -129,10 +246,19 @@ export function AuctionBrowsePage() {
       openAuthModal('bid', auction.title)
       return
     }
-    // Navigate to auction detail page or open bid modal
-    console.log('Bid on auction:', auction.id)
-    toast.success(`Bidding on ${auction.title}`)
-    // You can add navigation logic here
+    
+    // Check if user is a seller trying to bid on their own auction
+    if (sellerAuth && auction.seller_id === sellerAuth.user.id) {
+      toast.error('Sellers cannot bid on their own auctions')
+      return
+    }
+    
+    // Show auction detail modal first
+    setAuctionDetailModal({ isOpen: true, auction })
+  }
+
+  const handleResetFilters = () => {
+    setSearchFilters({})
   }
 
   const handleWatchlistToggle = (auctionId: string) => {
@@ -213,6 +339,7 @@ export function AuctionBrowsePage() {
                 key={auction.id}
                 auction={auction}
                 onBidClick={handleBidClick}
+                onCardClick={handleAuctionCardClick}
                 onWatchlistToggle={handleWatchlistToggle}
                 variant={viewMode === 'list' ? 'compact' : 'default'}
               />
@@ -253,6 +380,25 @@ export function AuctionBrowsePage() {
         onClose={closeAuthModal}
         action={authModal.action}
         auctionTitle={authModal.auctionTitle}
+      />
+      
+      {/* Auction Detail Modal */}
+      <AuctionDetailModal
+        auction={auctionDetailModal.auction}
+        isOpen={auctionDetailModal.isOpen}
+        onClose={() => setAuctionDetailModal({ isOpen: false, auction: null })}
+        onBidClick={handleAuctionDetailBidClick}
+        onWatchlistToggle={handleWatchlistToggle}
+        isWatched={false} // TODO: Implement watchlist status
+      />
+      
+      {/* Bid Confirmation Modal */}
+      <BidConfirmationModal
+        auction={bidConfirmationModal.auction}
+        isOpen={bidConfirmationModal.isOpen}
+        onClose={() => setBidConfirmationModal({ isOpen: false, auction: null })}
+        onConfirmBid={handleConfirmBid}
+        isSubmitting={isSubmittingBid}
       />
     </div>
   )

@@ -31,11 +31,26 @@ class ApiClient {
     this.baseURL = baseURL
   }
 
-  // Get current auth token from Supabase
+  // Get current auth token from Supabase or custom auth
   private async getAuthToken(): Promise<string | null> {
     try {
+      // First check for custom auth token (buyer/seller)
+      const customToken = localStorage.getItem('auth_token') || localStorage.getItem('seller_token')
+      if (customToken) {
+        console.log('[API] Using custom auth token')
+        return customToken
+      }
+
+      // Fallback to Supabase auth
       const { data: { session } } = await supabase.auth.getSession()
-      return session?.access_token || null
+      const supabaseToken = session?.access_token
+      if (supabaseToken) {
+        console.log('[API] Using Supabase auth token')
+        return supabaseToken
+      }
+
+      console.warn('[API] No auth token found')
+      return null
     } catch (error) {
       console.error('Error getting auth token:', error)
       return null
@@ -99,6 +114,9 @@ class ApiClient {
       // Add auth header if token exists
       if (token) {
         headers.Authorization = `Bearer ${token}`
+        console.log('[API] Request with auth token to:', endpoint)
+      } else {
+        console.warn('[API] Request without auth token to:', endpoint)
       }
 
       const response = await fetch(url, {
@@ -107,6 +125,12 @@ class ApiClient {
       })
 
       if (!response.ok) {
+        console.error('[API] Request failed:', {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          hasToken: !!token
+        })
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 

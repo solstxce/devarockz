@@ -11,6 +11,7 @@ interface AuctionCardProps {
   auction: Auction
   onBidClick?: (auction: Auction) => void
   onWatchlistToggle?: (auctionId: string) => void
+  onCardClick?: (auction: Auction) => void
   isWatched?: boolean
   variant?: 'default' | 'compact'
 }
@@ -18,7 +19,8 @@ interface AuctionCardProps {
 export function AuctionCard({ 
   auction, 
   onBidClick, 
-  onWatchlistToggle, 
+  onWatchlistToggle,
+  onCardClick, 
   isWatched = false,
   variant = 'default'
 }: AuctionCardProps) {
@@ -39,9 +41,13 @@ export function AuctionCard({
     onBidClick?.(auction)
   }
 
+  const handleCardClick = () => {
+    onCardClick?.(auction)
+  }
+
   if (variant === 'compact') {
     return (
-      <Card className="group cursor-pointer hover:shadow-lg transition-all duration-300 border-0 bg-white/80 backdrop-blur-sm">
+      <Card className="group cursor-pointer hover:shadow-lg transition-all duration-300 border-0 bg-white/80 backdrop-blur-sm" onClick={handleCardClick}>
         <CardContent className="p-4">
           <div className="flex space-x-4">
             <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
@@ -101,7 +107,7 @@ export function AuctionCard({
   }
 
   return (
-    <Card className="group cursor-pointer hover:shadow-xl transition-all duration-300 border-0 bg-white/90 backdrop-blur-sm overflow-hidden">
+    <Card className="group cursor-pointer hover:shadow-xl transition-all duration-300 border-0 bg-white/90 backdrop-blur-sm overflow-hidden" onClick={handleCardClick}>
       <div className="relative aspect-[4/3] overflow-hidden">
         {auction.images && auction.images.length > 0 && !imageError ? (
           <img
