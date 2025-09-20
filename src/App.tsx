@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { UnifiedAuthProvider } from '@/contexts/UnifiedAuthContext'
-import { useUnifiedAuth } from '@/hooks/useUnifiedAuth'
+import { AuthProvider } from '@/contexts/AuthContext'
+import { useAuth } from '@/hooks/useAuth'
+import { SellerProtectedRoute } from '@/components/SellerProtectedRoute'
 import { Navigation } from '@/components/layout/Navigation'
 import { Footer } from '@/components/layout/Footer'
 import { LoginPage } from '@/pages/auth/LoginPage'
@@ -10,23 +11,24 @@ import { AuctionBrowsePage } from '@/pages/AuctionBrowsePage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { SellerLoginPage } from '@/pages/seller/SellerLoginPage'
 import { SellerSignupPage } from '@/pages/seller/SellerSignupPage'
+import { SellerDashboardPage } from '@/pages/seller/SellerDashboardPage'
+import { SellerProfilePage } from '@/pages/seller/SellerProfilePage'
+import { SellPage } from '@/pages/SellPage'
+import { WatchlistPage } from '@/pages/WatchlistPage'
 import { Toaster } from 'react-hot-toast'
 
-function ProtectedRoute({ children, requireSeller = false }: { children: React.ReactNode; requireSeller?: boolean }) {
-  const { currentUser, loading, userType, isAuthenticated, sellerUser, session } = useUnifiedAuth()
-  
-  console.log('ProtectedRoute Debug:', {
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+
+  console.log('ProtectedRoute: Checking auth state:', {
+    user: !!user,
     loading,
-    isAuthenticated,
-    currentUser: !!currentUser,
-    userType,
-    requireSeller,
-    sellerUser: !!sellerUser,
-    session: !!session
+    userEmail: user?.email,
+    userId: user?.id
   })
-  
+
   if (loading) {
-    console.log('ProtectedRoute: Still loading...')
+    console.log('ProtectedRoute: Still loading, showing spinner...')
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -36,78 +38,63 @@ function ProtectedRoute({ children, requireSeller = false }: { children: React.R
       </div>
     )
   }
-  
-  if (!isAuthenticated || !currentUser) {
-    console.log('ProtectedRoute: Not authenticated, redirecting to login...')
-    return <Navigate to={requireSeller ? "/seller/login" : "/login"} replace />
+
+  if (!user) {
+    console.log('ProtectedRoute: No user found, redirecting to login...')
+    return <Navigate to="/login" replace />
   }
-  
-  if (requireSeller && userType !== 'seller') {
-    console.log('ProtectedRoute: Seller required but user is not seller, redirecting...')
-    return <Navigate to="/seller/login" replace />
-  }
-  
-  console.log('ProtectedRoute: Access granted!')
+
+  console.log('ProtectedRoute: User authenticated, rendering children...')
   return <>{children}</>
 }
 
 function AppContent() {
-  const { currentUser, signOut, sellerSignOut, userType } = useUnifiedAuth()
-
-  const handleSignOut = async () => {
-    if (userType === 'seller') {
-      await sellerSignOut()
-    } else {
-      await signOut()
-    }
-  }
+  const { user, signOut } = useAuth()
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navigation user={currentUser} onSignOut={handleSignOut} />
+      <Navigation user={user} onSignOut={signOut} />
       <main className="flex-1">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/auctions" element={<AuctionBrowsePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
-          
+
+          {/* User routes */}
+          <Route path="/watchlist" element={<WatchlistPage />} />
+          <Route path="/sell" element={<SellPage />} />
+
           {/* Seller routes */}
           <Route path="/seller/login" element={<SellerLoginPage />} />
           <Route path="/seller/signup" element={<SellerSignupPage />} />
           
-          <Route 
-            path="/dashboard" 
+          <Route
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <DashboardPage />
               </ProtectedRoute>
-            } 
+            }
           />
-          
+
           {/* Seller protected routes */}
-          <Route 
-            path="/seller/dashboard" 
+          <Route
+            path="/seller/dashboard"
             element={
-              <ProtectedRoute requireSeller={true}>
-                <div className="container mx-auto px-4 py-8">
-                  <h1 className="text-3xl font-bold mb-6">Seller Dashboard</h1>
-                  <div className="bg-white rounded-lg shadow p-6">
-                    <p className="text-gray-600">Welcome to your seller dashboard!</p>
-                    <p className="text-sm text-gray-500 mt-2">User Type: {userType}</p>
-                    {currentUser && (
-                      <div className="mt-4">
-                        <p><strong>Name:</strong> {currentUser.full_name}</p>
-                        <p><strong>Email:</strong> {currentUser.email}</p>
-                        <p><strong>Role:</strong> {currentUser.role}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </ProtectedRoute>
-            } 
+              <SellerProtectedRoute>
+                <SellerDashboardPage />
+              </SellerProtectedRoute>
+            }
           />
-          
+          <Route
+            path="/seller/profile"
+            element={
+              <SellerProtectedRoute>
+                <SellerProfilePage />
+              </SellerProtectedRoute>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -120,9 +107,9 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <UnifiedAuthProvider>
+      <AuthProvider>
         <AppContent />
-      </UnifiedAuthProvider>
+      </AuthProvider>
     </Router>
   )
 }

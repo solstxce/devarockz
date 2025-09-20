@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useUnifiedAuth } from '@/hooks/useUnifiedAuth'
+import { useAuth } from '@/hooks/useAuth'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -15,7 +15,7 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   
-  const { signIn } = useUnifiedAuth()
+  const { signIn } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,24 +23,30 @@ export function LoginPage() {
     setError('')
     setLoading(true)
 
+    console.log('LoginPage: Starting handleSubmit...')
+    console.log('LoginPage: Email:', email)
+
     try {
-      console.log('Regular login: Starting authentication...')
+      console.log('LoginPage: Calling signIn...')
       const { error } = await signIn(email, password)
+      console.log('LoginPage: signIn result:', { error })
+
       if (error) {
-        console.error('Regular login: Authentication failed:', error)
+        console.error('LoginPage: Signin failed:', error)
         setError(error.message)
       } else {
-        console.log('Regular login: Authentication successful, redirecting...')
-        // Add a small delay to ensure state is updated before redirect
+        console.log('LoginPage: Signin successful, navigating to dashboard...')
+        // Add a small delay to ensure auth state is updated
         setTimeout(() => {
-          console.log('Regular login: Navigating to dashboard...')
+          console.log('LoginPage: Delayed navigation to dashboard...')
           navigate('/dashboard')
-        }, 500)
+        }, 100)
       }
-    } catch {
-      console.error('Regular login: Unexpected error')
+    } catch (err) {
+      console.error('LoginPage: Unexpected error:', err)
       setError('An unexpected error occurred')
     } finally {
+      console.log('LoginPage: Setting loading to false')
       setLoading(false)
     }
   }

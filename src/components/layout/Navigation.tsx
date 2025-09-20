@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { User } from '@/lib/supabase'
+import { useSellerAuth } from '@/hooks/useSellerAuth'
 
 interface NavigationProps {
   user?: User | null
@@ -39,6 +40,10 @@ export function Navigation({ user, onSignOut, notificationCount = 0, onSearch }:
   const [searchQuery, setSearchQuery] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const location = useLocation()
+  const { getSellerUser, sellerSignOut } = useSellerAuth()
+
+  const sellerAuth = getSellerUser()
+  const isAuthenticated = !!(user || sellerAuth)
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,11 +54,11 @@ export function Navigation({ user, onSignOut, notificationCount = 0, onSearch }:
     { name: 'Home', href: '/', icon: Home },
     { name: 'Browse', href: '/auctions', icon: Gavel },
     { name: 'Watchlist', href: '/watchlist', icon: Heart },
-    ...(user?.role === 'seller' || user?.role === 'admin' 
-      ? [{ name: 'Sell', href: '/sell', icon: PlusCircle }] 
+    ...(user?.role === 'seller' || user?.role === 'admin' || sellerAuth
+      ? [{ name: 'Sell', href: '/sell', icon: PlusCircle }]
       : []),
-    ...(user?.role === 'admin' 
-      ? [{ name: 'Admin', href: '/admin', icon: BarChart3 }] 
+    ...(user?.role === 'admin'
+      ? [{ name: 'Admin', href: '/admin', icon: BarChart3 }]
       : [])
   ]
 
@@ -115,7 +120,7 @@ export function Navigation({ user, onSignOut, notificationCount = 0, onSearch }:
 
           {/* User Actions */}
           <div className="flex items-center space-x-4">
-            {user ? (
+            {isAuthenticated ? (
               <>
                 {/* Notifications */}
                 <Button variant="ghost" size="sm" className="relative">
@@ -135,9 +140,9 @@ export function Navigation({ user, onSignOut, notificationCount = 0, onSearch }:
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={user.avatar_url} alt={user.full_name} />
+                        <AvatarImage src={user?.avatar_url} alt={user?.full_name || sellerAuth?.profile.business_name} />
                         <AvatarFallback>
-                          {user.full_name?.charAt(0).toUpperCase() || <UserIcon className="w-4 h-4" />}
+                          {(user?.full_name?.charAt(0) || sellerAuth?.profile.business_name?.charAt(0) || 'U').toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                     </Button>
@@ -145,30 +150,42 @@ export function Navigation({ user, onSignOut, notificationCount = 0, onSearch }:
                   <DropdownMenuContent className="w-56" align="end" forceMount>
                     <DropdownMenuLabel className="font-normal">
                       <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">{user.full_name}</p>
+                        <p className="text-sm font-medium leading-none">
+                          {user?.full_name || sellerAuth?.profile.business_name}
+                        </p>
                         <p className="text-xs leading-none text-muted-foreground">
-                          {user.email}
+                          {user?.email || sellerAuth?.user.email}
                         </p>
                         <Badge variant="outline" className="w-fit text-xs">
-                          {user.role}
+                          {sellerAuth ? 'Seller' : user?.role}
                         </Badge>
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
-                      <Link to="/dashboard" className="flex items-center">
+                      <Link to={sellerAuth ? "/seller/dashboard" : "/dashboard"} className="flex items-center">
                         <UserIcon className="mr-2 h-4 w-4" />
                         Dashboard
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <Link to="/profile" className="flex items-center">
+                      <Link to={sellerAuth ? "/seller/profile" : "/profile"} className="flex items-center">
                         <Settings className="mr-2 h-4 w-4" />
                         Profile Settings
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={onSignOut} className="text-red-600 focus:text-red-600">
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        if (sellerAuth) {
+                          await sellerSignOut()
+                          window.location.href = '/'
+                        } else {
+                          onSignOut?.()
+                        }
+                      }}
+                      className="text-red-600 focus:text-red-600"
+                    >
                       <LogOut className="mr-2 h-4 w-4" />
                       Sign Out
                     </DropdownMenuItem>

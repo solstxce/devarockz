@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Socket } from 'socket.io-client'
 import { apiClient } from '@/lib/api'
-import { useUnifiedAuth } from '@/hooks/useUnifiedAuth'
+import { useAuth } from '@/hooks/useAuth'
 
 export interface UseRealTimeOptions {
   autoConnect?: boolean
@@ -9,7 +9,7 @@ export interface UseRealTimeOptions {
 
 export function useRealTime(options: UseRealTimeOptions = {}) {
   const { autoConnect = true } = options
-  const { currentUser: user } = useUnifiedAuth()
+  const { user } = useAuth()
   const socketRef = useRef<Socket | null>(null)
 
   useEffect(() => {

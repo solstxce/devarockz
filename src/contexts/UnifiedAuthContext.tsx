@@ -1,4 +1,4 @@
-import { createContext, useEffect, useRef, useState } from 'react'
+import { createContext, useEffect, useRef, useState, useCallback } from 'react'
 
 // Module-level guard to reduce duplicate initialization side-effects when React StrictMode
 // intentionally mounts components twice in development. We still allow state subscriptions
@@ -57,9 +57,6 @@ export function UnifiedAuthProvider({ children }: UnifiedAuthProviderProps) {
   // Common state
   const [loading, setLoading] = useState(true)
 
-  // Computed properties
-  const isAuthenticated = !!(session || sellerToken)
-  
   // If we have a session but no user profile, create a temporary user from session data
   const sessionFallbackUser = session?.user && !user ? {
     id: session.user.id,
@@ -71,12 +68,15 @@ export function UnifiedAuthProvider({ children }: UnifiedAuthProviderProps) {
     is_verified: false,
     is_active: true
   } : null
-  
+
   const currentUser = sellerUser || user || sessionFallbackUser
   const userType: 'bidder' | 'seller' | null = sellerUser ? 'seller' : (user || sessionFallbackUser) ? ((user || sessionFallbackUser)!.role as 'bidder' | 'seller') : null
 
+  // Computed properties
+  const isAuthenticated = !!((session && (user || sessionFallbackUser)) || sellerUser)
+
   // Fetch user profile from our custom users table
-  const fetchUserProfile = async (authUser: SupabaseUser): Promise<User | null> => {
+  const fetchUserProfile = useCallback(async (authUser: SupabaseUser): Promise<User | null> => {
     try {
       console.log('Fetching user profile for:', authUser.id)
       const { data, error } = await supabase
@@ -120,10 +120,10 @@ export function UnifiedAuthProvider({ children }: UnifiedAuthProviderProps) {
       console.log('Using fallback user data after exception:', fallbackUser)
       return fallbackUser
     }
-  }
+  }, [])
 
   // Load seller auth from localStorage on mount
-  const loadSellerAuth = () => {
+  const loadSellerAuth = useCallback(() => {
     try {
       const token = localStorage.getItem('seller_token')
       const userData = localStorage.getItem('seller_user')
@@ -132,7 +132,7 @@ export function UnifiedAuthProvider({ children }: UnifiedAuthProviderProps) {
       if (token && userData && profileData) {
         const user = JSON.parse(userData) as User
         const profile = JSON.parse(profileData) as SellerProfile
-        
+
         setSellerToken(token)
         setSellerUser({
           ...user,
@@ -146,86 +146,80 @@ export function UnifiedAuthProvider({ children }: UnifiedAuthProviderProps) {
       localStorage.removeItem('seller_user')
       localStorage.removeItem('seller_profile')
     }
-  }
+  }, [])
 
   useEffect(() => {
     let mounted = true
+    let authCheckTimeout: NodeJS.Timeout | null = null
 
     const initializeAuth = async () => {
       try {
         if (!unifiedAuthInitializedOnce) {
           console.log('Initializing unified auth system...')
           unifiedAuthInitializedOnce = true
-        } else {
-          // Silently skip duplicate init log (likely StrictMode re-mount)
         }
-        
-        // Load seller auth from localStorage first (this is synchronous and fast)
+
+        // Load seller auth from localStorage first
         loadSellerAuth()
 
-        // Get initial Supabase session - don't block on this
-        if (!session && !sellerToken) {
-          console.log('Getting Supabase session...')
-        }
-        
-        // Use a more forgiving approach - try to get session but don't block app startup
-        const initializeSupabaseSession = async () => {
-          const start = performance.now()
-          try {
-            const { data: { session } } = await supabase.auth.getSession()
-            if (!mounted) return
-            console.log('[Auth] Initial Supabase session retrieved in', Math.round(performance.now() - start), 'ms =>', !!session)
-            setSession(session)
-            if (session?.user) {
-              try {
-                const userProfile = await fetchUserProfile(session.user)
-                if (mounted && userProfile) setUser(userProfile)
-              } catch (profileError) {
-                console.warn('[Auth] Failed to fetch user profile (non-fatal):', profileError)
-              }
+        // Set a timeout to ensure loading is always set to false
+        authCheckTimeout = setTimeout(() => {
+          if (mounted) {
+            console.log('Auth initialization safety timeout reached')
+            setLoading(false)
+          }
+        }, 5000) // 5 second safety timeout
+
+        // Get initial Supabase session
+        const start = performance.now()
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (!mounted) return
+
+          console.log('[Auth] Initial Supabase session retrieved in', Math.round(performance.now() - start), 'ms =>', !!session)
+          setSession(session)
+
+          if (session?.user) {
+            try {
+              const userProfile = await fetchUserProfile(session.user)
+              if (mounted && userProfile) setUser(userProfile)
+            } catch (profileError) {
+              console.warn('[Auth] Failed to fetch user profile (non-fatal):', profileError)
             }
-          } catch (sessionError) {
-            if (performance.now() - start > 14900) {
-              console.warn('[Auth] getSession exceeded 15s (soft timeout). Continuing without session. Error:', sessionError)
-            } else {
-              console.warn('[Auth] getSession failed early:', sessionError)
-            }
-            if (mounted) {
-              // Ensure clean state; auth state change listener will correct later
-              setSession(null)
-              setUser(null)
-            }
+          }
+        } catch (sessionError) {
+          console.warn('[Auth] getSession failed:', sessionError)
+          if (mounted) {
+            setSession(null)
+            setUser(null)
           }
         }
 
-        // Kick off without racing/throwing; we log soft timeout instead
-        initializeSupabaseSession()
-        
       } catch (error) {
         console.error('Error initializing auth:', error)
       } finally {
-        // Set loading to false immediately after seller auth is loaded
-        // Don't wait for Supabase session since it might be slow
+        // Always set loading to false after initialization attempt
         if (mounted) {
-          // Give a small delay to ensure seller auth is processed
           setTimeout(() => {
             if (mounted) {
+              console.log('Auth initialization completed, setting loading to false')
               setLoading(false)
             }
-          }, 100)
+          }, 1000) // Small delay to allow state updates
         }
       }
     }
 
     initializeAuth()
 
-    // Listen for Supabase auth changes (with error handling)
+    // Listen for Supabase auth changes
     let subscription: { subscription: { unsubscribe: () => void } } | null = null
     try {
       const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
         if (mounted) {
           console.log('Auth state changed:', _event, !!session)
           setSession(session)
+
           if (session?.user) {
             try {
               const userProfile = await fetchUserProfile(session.user)
@@ -234,7 +228,6 @@ export function UnifiedAuthProvider({ children }: UnifiedAuthProviderProps) {
               }
             } catch (error) {
               console.error('Error fetching user profile on auth change:', error)
-              // Don't set user to null here - keep the session
             }
           } else {
             setUser(null)
@@ -248,6 +241,9 @@ export function UnifiedAuthProvider({ children }: UnifiedAuthProviderProps) {
 
     return () => {
       mounted = false
+      if (authCheckTimeout) {
+        clearTimeout(authCheckTimeout)
+      }
       if (subscription) {
         try {
           subscription.subscription.unsubscribe()
@@ -256,7 +252,7 @@ export function UnifiedAuthProvider({ children }: UnifiedAuthProviderProps) {
         }
       }
     }
-  }, [])
+  }, [loadSellerAuth, fetchUserProfile])
 
   // Helper function for retry logic
   const retryOperation = async <T,>(
@@ -337,34 +333,44 @@ export function UnifiedAuthProvider({ children }: UnifiedAuthProviderProps) {
   const signIn = async (email: string, password: string) => {
     try {
       console.log('Starting regular user signin process...')
-      
+
       // Clear any existing seller auth when signing in as regular user
       await sellerSignOut()
-      
+
       console.log('Calling Supabase auth...')
-      
+
       const start = performance.now()
       const result = await withInFlightGuard('signin', async () => {
         const op = async () => supabase.auth.signInWithPassword({ email, password })
         return await retryOperation(op, 2)
       })
-      const { error } = result
+      const { error, data } = result
 
       console.log('Supabase auth response in', Math.round(performance.now() - start), 'ms', { error })
-      
+
       if (error) {
         console.error('Supabase auth error:', error.message)
         return { error }
       }
-      
+
+      // If successful, ensure we fetch the user profile immediately
+      if (data?.user) {
+        try {
+          const userProfile = await fetchUserProfile(data.user)
+          setUser(userProfile)
+        } catch (profileError) {
+          console.warn('Failed to fetch user profile immediately after signin:', profileError)
+        }
+      }
+
       return { error: undefined }
     } catch (error) {
       console.error('Regular signin error:', error)
-      
+
       if (error instanceof Error) {
         return { error }
       }
-      
+
       return { error: new Error('An unexpected error occurred during signin') }
     }
   }

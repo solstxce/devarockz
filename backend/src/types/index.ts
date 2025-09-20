@@ -365,8 +365,8 @@ export interface CreateAuctionRequest {
   starting_price: number
   reserve_price?: number
   bid_increment: number
-  start_time: string
-  end_time: string
+  start_time: Date
+  end_time: Date
   condition: 'new' | 'used' | 'refurbished'
   shipping_cost: number
   shipping_methods: string[]

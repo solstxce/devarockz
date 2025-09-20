@@ -21,7 +21,38 @@ export class AuctionController {
       throw new AppError('User not authenticated', 401)
     }
 
-    const auctionData: CreateAuctionRequest = req.body
+    // Handle both JSON and multipart/form-data
+    let auctionData: CreateAuctionRequest
+    let imageFiles: Express.Multer.File[] = []
+
+    if (req.body && Object.keys(req.body).length > 0) {
+      // JSON data
+      auctionData = req.body
+    } else if (req.body && typeof req.body === 'object') {
+      // Form data - need to parse fields
+      auctionData = {
+        title: req.body.title,
+        description: req.body.description,
+        category_id: req.body.category_id,
+        starting_price: parseFloat(req.body.starting_price),
+        bid_increment: parseFloat(req.body.bid_increment),
+        start_time: new Date(req.body.start_time),
+        end_time: new Date(req.body.end_time),
+        condition: req.body.condition,
+        shipping_cost: parseFloat(req.body.shipping_cost || 0),
+        shipping_methods: JSON.parse(req.body.shipping_methods || '[]')
+      }
+      imageFiles = req.files as Express.Multer.File[]
+    } else {
+      throw new AppError('No auction data provided', 400)
+    }
+
+    // Add image file paths to auction data if files were uploaded
+    if (imageFiles && imageFiles.length > 0) {
+      const imagePaths = imageFiles.map(file => `/uploads/${file.filename}`)
+      ;(auctionData as any).images = imagePaths
+    }
+
     const auction = await this.auctionService.createAuction(req.userId, auctionData)
 
     res.status(201).json({
