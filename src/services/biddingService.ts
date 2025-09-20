@@ -77,7 +77,7 @@ class BiddingService {
   // Get bid history for a specific auction
   async getAuctionBids(auctionId: string): Promise<ApiResponse<Bid[]>> {
     try {
-      return await apiClient.get<Bid[]>(`/auctions/${auctionId}/bids`)
+      return await apiClient.get<Bid[]>(`/bids/auction/${auctionId}`)
     } catch (error) {
       console.error('Error fetching auction bids:', error)
       return {

@@ -215,6 +215,11 @@ export const schemas = {
   // UUID param schema
   uuidParam: Joi.object({
     id: Joi.string().uuid().required()
+  }),
+
+  // Auction ID param schema
+  auctionIdParam: Joi.object({
+    auctionId: Joi.string().uuid().required()
   })
 }
 

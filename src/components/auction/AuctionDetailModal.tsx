@@ -9,20 +9,21 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { 
-  Clock, 
-  Gavel, 
-  Heart, 
-  MapPin, 
-  Package, 
-  Shield, 
-  Star, 
+import {
+  Clock,
+  Gavel,
+  Heart,
+  MapPin,
+  Package,
+  Shield,
+  Star,
   User,
   ChevronLeft,
   ChevronRight,
   Eye,
   Share2
 } from 'lucide-react'
+import { BidHistory } from './BidHistory'
 import type { Auction } from '@/lib/supabase'
 
 interface AuctionDetailModalProps {
@@ -89,7 +90,7 @@ export function AuctionDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="max-h-[90vh] overflow-y-auto p-0" style={{ width: '95vw', maxWidth: 'none' }}>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
           {/* Image Section */}
           <div className="relative bg-gray-100">
@@ -269,6 +270,11 @@ export function AuctionDetailModal({
             </div>
 
             <div className="border-t my-6"></div>
+
+            {/* Bid History Section */}
+            <div className="mb-6">
+              <BidHistory auctionId={auction.id} currentBid={auction.current_bid} />
+            </div>
 
             {/* Action Buttons */}
             <div className="space-y-3 mt-auto">
