@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useAuth } from '@/hooks/useAuth'
+import { useUnifiedAuth } from '@/hooks/useUnifiedAuth'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -15,7 +15,7 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   
-  const { signIn } = useAuth()
+  const { signIn } = useUnifiedAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,13 +24,21 @@ export function LoginPage() {
     setLoading(true)
 
     try {
+      console.log('Regular login: Starting authentication...')
       const { error } = await signIn(email, password)
       if (error) {
+        console.error('Regular login: Authentication failed:', error)
         setError(error.message)
       } else {
-        navigate('/dashboard')
+        console.log('Regular login: Authentication successful, redirecting...')
+        // Add a small delay to ensure state is updated before redirect
+        setTimeout(() => {
+          console.log('Regular login: Navigating to dashboard...')
+          navigate('/dashboard')
+        }, 500)
       }
     } catch {
+      console.error('Regular login: Unexpected error')
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)

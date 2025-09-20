@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { sellerAuthService, type SellerLoginData } from '@/services/sellerAuthService'
+import { useUnifiedAuth } from '@/hooks/useUnifiedAuth'
 import toast from 'react-hot-toast'
 
 const sellerLoginSchema = z.object({
@@ -24,6 +24,7 @@ export function SellerLoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
+  const { sellerSignIn } = useUnifiedAuth()
 
   const {
     register,
@@ -38,18 +39,21 @@ export function SellerLoginPage() {
       setIsLoading(true)
       setError('')
 
-      const response = await sellerAuthService.sellerSignin(data as SellerLoginData)
+      console.log('Seller login: Starting authentication...')
+      const { error } = await sellerSignIn(data.email, data.password)
 
-      if (response.success && response.data) {
-        // Store authentication data (you might want to use a proper auth context)
-        localStorage.setItem('seller_token', response.data.token)
-        localStorage.setItem('seller_user', JSON.stringify(response.data.user))
-        localStorage.setItem('seller_profile', JSON.stringify(response.data.seller_profile))
-
+      if (!error) {
+        console.log('Seller login: Authentication successful, showing toast...')
         toast.success('Welcome back! Redirecting to your dashboard...')
-        navigate('/seller/dashboard')
+        
+        // Add a small delay to ensure state is updated before redirect
+        setTimeout(() => {
+          console.log('Seller login: Redirecting to dashboard...')
+          navigate('/seller/dashboard')
+        }, 500)
       } else {
-        setError(response.error || 'Login failed. Please try again.')
+        console.error('Seller login: Authentication failed:', error)
+        setError(error.message || 'Login failed. Please try again.')
       }
     } catch (error) {
       console.error('Seller login error:', error)

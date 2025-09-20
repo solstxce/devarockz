@@ -67,32 +67,7 @@ CREATE TABLE public.seller_profiles (
 );
 
 -- Enable RLS
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.seller_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.seller_profiles DISABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies if they exist
-DROP POLICY IF EXISTS "Users can view own profile" ON public.users;
-DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
-DROP POLICY IF EXISTS "Service role can insert users" ON public.users;
-DROP POLICY IF EXISTS "Sellers can view own profile" ON public.seller_profiles;
-DROP POLICY IF EXISTS "Sellers can update own profile" ON public.seller_profiles;
-DROP POLICY IF EXISTS "Service role can insert seller profiles" ON public.seller_profiles;
-
--- Create RLS policies
-CREATE POLICY "Users can view own profile" ON public.users
-    FOR SELECT USING (auth.uid()::text = id::text);
-
-CREATE POLICY "Users can update own profile" ON public.users
-    FOR UPDATE USING (auth.uid()::text = id::text);
-
-CREATE POLICY "Service role can manage users" ON public.users
-    FOR ALL USING (auth.role() = 'service_role');
-
-CREATE POLICY "Sellers can view own profile" ON public.seller_profiles
-    FOR SELECT USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "Sellers can update own profile" ON public.seller_profiles
-    FOR UPDATE USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "Service role can manage seller profiles" ON public.seller_profiles
-    FOR ALL USING (auth.role() = 'service_role');

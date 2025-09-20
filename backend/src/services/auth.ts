@@ -65,46 +65,43 @@ export class AuthService {
         throw new Error(authError?.message || 'Failed to create user account')
       }
 
-      // Wait a bit for auth user to be fully created
-      await new Promise(resolve => setTimeout(resolve, 100))
+      // Wait a bit for auth user to be fully created and trigger to execute
+      await new Promise(resolve => setTimeout(resolve, 500))
 
-      // Create user profile in public.users table using the auth user ID
-      const { data: user, error: profileError } = await supabaseAdmin
+      // The trigger should have created the user profile, let's update it with our data
+      const { data: updatedUser, error: updateError } = await supabaseAdmin
         .from('users')
-        .insert({
-          id: authData.user.id,
+        .update({
           email: authData.user.email || email,
           full_name,
           role,
           is_verified: true,
-          is_active: true
+          is_active: true,
+          updated_at: new Date().toISOString()
         })
+        .eq('id', authData.user.id)
         .select()
         .single()
 
-      if (profileError) {
-        console.error('Profile creation error:', profileError)
-        // If profile creation fails, clean up the auth user
+      if (updateError || !updatedUser) {
+        console.error('Profile update error:', updateError)
+        // Clean up the auth user
         try {
           await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
         } catch (cleanupError) {
           console.error('Failed to cleanup auth user:', cleanupError)
         }
-        throw new Error(`Failed to create user profile: ${profileError.message}`)
-      }
-
-      if (!user) {
-        throw new Error('Failed to create user profile: No data returned')
+        throw new Error(`Failed to update user profile: ${updateError?.message}`)
       }
 
       // Generate token
       const token = this.generateToken({
-        userId: user.id,
-        email: user.email,
-        role: user.role
+        userId: updatedUser.id,
+        email: updatedUser.email,
+        role: updatedUser.role
       })
 
-      return { user, token }
+      return { user: updatedUser, token }
     } catch (error) {
       console.error('Signup error:', error)
       throw new Error(error instanceof Error ? error.message : 'Failed to create user account')

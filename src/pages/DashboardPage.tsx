@@ -1,11 +1,11 @@
-import { useAuth } from '@/hooks/useAuth'
+import { useUnifiedAuth } from '@/hooks/useUnifiedAuth'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Gavel, Heart, TrendingUp, Clock, Plus, Eye } from 'lucide-react'
 
 export function DashboardPage() {
-  const { user } = useAuth()
+  const { currentUser: user } = useUnifiedAuth()
 
   const stats = [
     { label: 'Active Bids', value: '5', icon: Gavel, color: 'text-blue-600' },

@@ -1,5 +1,90 @@
-import { apiClient, type ApiResponse } from '@/lib/api'
+import type { ApiResponse } from '@/lib/api'
 import type { User } from '@/lib/supabase'
+
+// Seller-specific API client that doesn't depend on Supabase auth
+class SellerApiClient {
+  private baseURL: string
+
+  constructor() {
+    this.baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'
+  }
+
+  // Get seller auth token from localStorage
+  private getSellerToken(): string | null {
+    return localStorage.getItem('seller_token')
+  }
+
+  // Generic request method for seller API
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    try {
+      const url = `${this.baseURL}${endpoint}`
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...options.headers as Record<string, string>,
+      }
+      
+      // Add seller auth header if token exists
+      const token = this.getSellerToken()
+      if (token) {
+        headers.Authorization = `Bearer ${token}`
+      }
+
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        let errorMessage = `HTTP error! status: ${response.status}`
+        
+        try {
+          const errorData = JSON.parse(errorText)
+          errorMessage = errorData.error || errorData.message || errorMessage
+        } catch {
+          errorMessage = errorText || errorMessage
+        }
+        
+        throw new Error(errorMessage)
+      }
+
+      const data = await response.json()
+      return data
+    } catch (error) {
+      console.error('Seller API request failed:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }
+    }
+  }
+
+  // HTTP methods
+  async post<T>(endpoint: string, data?: unknown): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    })
+  }
+
+  async get<T>(endpoint: string): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint)
+  }
+
+  async put<T>(endpoint: string, data?: unknown): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    })
+  }
+}
+
+// Create seller API client instance
+const sellerApiClient = new SellerApiClient()
 
 export interface SellerProfile {
   id: string
@@ -70,32 +155,32 @@ export interface VerificationStatusResponse {
 class SellerAuthService {
   // Seller signup
   async sellerSignup(data: SellerSignupData): Promise<ApiResponse<SellerAuthResponse>> {
-    return await apiClient.post<SellerAuthResponse>('/seller/auth/signup', data)
+    return await sellerApiClient.post<SellerAuthResponse>('/seller/auth/signup', data)
   }
 
   // Seller signin
   async sellerSignin(data: SellerLoginData): Promise<ApiResponse<SellerAuthResponse>> {
-    return await apiClient.post<SellerAuthResponse>('/seller/auth/signin', data)
+    return await sellerApiClient.post<SellerAuthResponse>('/seller/auth/signin', data)
   }
 
   // Get seller profile
   async getSellerProfile(): Promise<ApiResponse<{ user: User; seller_profile: SellerProfile }>> {
-    return await apiClient.get<{ user: User; seller_profile: SellerProfile }>('/seller/auth/profile')
+    return await sellerApiClient.get<{ user: User; seller_profile: SellerProfile }>('/seller/auth/profile')
   }
 
   // Update seller profile
   async updateSellerProfile(data: Partial<SellerProfile>): Promise<ApiResponse<SellerProfile>> {
-    return await apiClient.put<SellerProfile>('/seller/auth/profile', data)
+    return await sellerApiClient.put<SellerProfile>('/seller/auth/profile', data)
   }
 
   // Submit business verification
   async submitBusinessVerification(data: BusinessVerificationData): Promise<ApiResponse<SellerProfile>> {
-    return await apiClient.post<SellerProfile>('/seller/auth/verify-business', data)
+    return await sellerApiClient.post<SellerProfile>('/seller/auth/verify-business', data)
   }
 
   // Get verification status
   async getVerificationStatus(): Promise<ApiResponse<VerificationStatusResponse>> {
-    return await apiClient.get<VerificationStatusResponse>('/seller/auth/verification-status')
+    return await sellerApiClient.get<VerificationStatusResponse>('/seller/auth/verification-status')
   }
 }
 

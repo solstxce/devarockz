@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useAuth } from '@/hooks/useAuth'
+import { useUnifiedAuth } from '@/hooks/useUnifiedAuth'
 
 export function SignupPage() {
   const [formData, setFormData] = useState({
@@ -21,7 +21,7 @@ export function SignupPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   
-  const { signUp } = useAuth()
+  const { signUp } = useUnifiedAuth()
   const navigate = useNavigate()
 
   const handleChange = (field: string, value: string) => {
