@@ -30,6 +30,22 @@ export class AuctionController {
       auctionData = req.body
     } else if (req.body && typeof req.body === 'object') {
       // Form data - need to parse fields
+      const shippingMethodsRaw = req.body.shipping_methods || '["standard"]'
+      console.log('Raw shipping_methods from form:', shippingMethodsRaw)
+      let shippingMethods: string[]
+      try {
+        shippingMethods = JSON.parse(shippingMethodsRaw)
+        console.log('Parsed shipping_methods:', shippingMethods)
+        // Ensure it's an array
+        if (!Array.isArray(shippingMethods)) {
+          shippingMethods = [shippingMethods]
+        }
+        console.log('Final shipping_methods array:', shippingMethods)
+      } catch (error) {
+        console.error('Error parsing shipping_methods:', error)
+        shippingMethods = ['standard']
+      }
+
       auctionData = {
         title: req.body.title,
         description: req.body.description,
@@ -40,7 +56,7 @@ export class AuctionController {
         end_time: new Date(req.body.end_time),
         condition: req.body.condition,
         shipping_cost: parseFloat(req.body.shipping_cost || 0),
-        shipping_methods: JSON.parse(req.body.shipping_methods || '[]')
+        shipping_methods: shippingMethods
       }
       imageFiles = req.files as Express.Multer.File[]
     } else {

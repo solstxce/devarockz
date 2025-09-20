@@ -35,6 +35,26 @@ export class AuctionService {
       images = []
     } = auctionData
 
+    console.log('About to insert auction with shipping_methods:', shipping_methods)
+    console.log('Type of shipping_methods:', typeof shipping_methods)
+    console.log('Array.isArray(shipping_methods):', Array.isArray(shipping_methods))
+
+    // Ensure shipping_methods is a proper array for PostgreSQL
+    let pgShippingMethods: string[]
+    if (Array.isArray(shipping_methods)) {
+      pgShippingMethods = shipping_methods.filter(method => typeof method === 'string' && method.trim().length > 0)
+    } else if (typeof shipping_methods === 'string') {
+      pgShippingMethods = [shipping_methods]
+    } else {
+      pgShippingMethods = ['standard']
+    }
+    
+    console.log('Final pgShippingMethods for database:', pgShippingMethods)
+    
+    // Ensure images is also a proper array
+    const pgImages = Array.isArray(images) ? images : []
+    console.log('Images for database:', pgImages)
+
     const { data: auction, error } = await supabase
       .from('auctions')
       .insert({
@@ -50,8 +70,8 @@ export class AuctionService {
         end_time,
         condition,
         shipping_cost,
-        shipping_methods,
-        images,
+        shipping_methods: pgShippingMethods,
+        images: pgImages,
         status: 'draft'
       })
       .select(`

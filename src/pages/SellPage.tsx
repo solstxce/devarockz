@@ -11,7 +11,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Progress } from '@/components/ui/progress'
 import { useAuth } from '@/hooks/useAuth'
 import { useSellerAuth } from '@/hooks/useSellerAuth'
-import { categoryService } from '@/services/categoryService'
 import { Plus, Image, DollarSign, Clock, Tag, Upload, X, CheckCircle, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import type { Category } from '@/lib/supabase'
@@ -59,14 +58,35 @@ export function SellPage() {
     const fetchCategories = async () => {
       try {
         setCategoriesLoading(true)
-        const response = await categoryService.getCategories()
-        if (response.success && response.data) {
-          setCategories(response.data)
+        console.log('Fetching categories from API directly...')
+        
+        // Fetch directly from the backend API
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/categories`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        })
+        
+        console.log('Categories API response status:', response.status)
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        
+        const result = await response.json()
+        console.log('Categories API response:', result)
+        
+        if (result.success && result.data && Array.isArray(result.data)) {
+          setCategories(result.data)
+          console.log('✅ Categories loaded successfully:', result.data.length, 'categories')
         } else {
-          console.error('Failed to fetch categories:', response.error)
+          console.error('❌ API returned unsuccessful response:', result)
+          setError(`Failed to load categories: ${result.error || 'Unknown error'}`)
         }
       } catch (error) {
-        console.error('Error fetching categories:', error)
+        console.error('❌ Network error fetching categories:', error)
+        setError(`Network error: ${error instanceof Error ? error.message : 'Failed to connect to server'}`)
       } finally {
         setCategoriesLoading(false)
       }
@@ -342,18 +362,24 @@ export function SellPage() {
                   {/* Category */}
                   <div className="space-y-2">
                     <Label htmlFor="category">Category *</Label>
-                    <Select value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((category) => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {categoriesLoading ? (
+                      <div className="text-sm text-gray-500">Loading categories...</div>
+                    ) : categories.length === 0 ? (
+                      <div className="text-sm text-red-500">No categories available. Please try refreshing the page.</div>
+                    ) : (
+                      <Select value={formData.category} onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
 
                   {/* Description */}
