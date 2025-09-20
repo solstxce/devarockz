@@ -85,8 +85,8 @@ class UserDashboardService {
         this.getUserWatchlist()
       ])
 
-      // Handle stats - provide default values if API fails
-      let stats: UserDashboardStats = {
+            // Handle stats - calculate from actual data or provide defaults
+      const stats: UserDashboardStats = {
         active_bids: 0,
         watching_count: 0,
         won_auctions: 0,
@@ -95,16 +95,11 @@ class UserDashboardService {
         total_earned: 0
       }
 
-      if (statsResult.status === 'fulfilled' && statsResult.value.success) {
-        stats = statsResult.value.data || stats
-      } else {
-        console.warn('[UserDashboard] Stats API not available, using defaults')
-      }
-
       // Handle bids - empty array if API fails
       let activeBids: UserBidSummary[] = []
       if (bidsResult.status === 'fulfilled' && bidsResult.value.success) {
         activeBids = bidsResult.value.data || []
+        stats.active_bids = activeBids.length
       } else {
         console.warn('[UserDashboard] Bids API not available, using empty array')
       }
@@ -113,8 +108,21 @@ class UserDashboardService {
       let watchlist: WatchlistItem[] = []
       if (watchlistResult.status === 'fulfilled' && watchlistResult.value.success) {
         watchlist = watchlistResult.value.data || []
+        stats.watching_count = watchlist.length
       } else {
         console.warn('[UserDashboard] Watchlist API not available, using empty array')
+      }
+
+      // Try to get additional stats from API if available
+      if (statsResult.status === 'fulfilled' && statsResult.value.success && statsResult.value.data) {
+        const apiStats = statsResult.value.data
+        // Keep calculated values but use API values for other stats
+        stats.won_auctions = apiStats.won_auctions || 0
+        stats.items_sold = apiStats.items_sold || 0
+        stats.total_spent = apiStats.total_spent || 0
+        stats.total_earned = apiStats.total_earned || 0
+      } else {
+        console.warn('[UserDashboard] Stats API not available, using calculated values where possible')
       }
 
       const dashboardData: DashboardData = {
