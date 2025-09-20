@@ -1,0 +1,215 @@
+import { Request, Response } from 'express'
+import { AuctionService } from '@/services/auction'
+import { AppError, asyncHandler } from '@/middleware/error'
+import type { 
+  Auction, 
+  CreateAuctionRequest, 
+  SearchFiltersRequest, 
+  ApiResponse 
+} from '@/types'
+
+export class AuctionController {
+  private auctionService: AuctionService
+
+  constructor() {
+    this.auctionService = AuctionService.getInstance()
+  }
+
+  // Create new auction
+  createAuction = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.userId) {
+      throw new AppError('User not authenticated', 401)
+    }
+
+    const auctionData: CreateAuctionRequest = req.body
+    const auction = await this.auctionService.createAuction(req.userId, auctionData)
+
+    res.status(201).json({
+      success: true,
+      message: 'Auction created successfully',
+      data: auction
+    } as ApiResponse<Auction>)
+  })
+
+  // Get auction by ID
+  getAuction = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const { id } = req.params
+    
+    if (!id) {
+      throw new AppError('Auction ID is required', 400)
+    }
+    
+    const auction = await this.auctionService.getAuctionById(id)
+
+    if (!auction) {
+      throw new AppError('Auction not found', 404)
+    }
+
+    res.status(200).json({
+      success: true,
+      data: auction
+    } as ApiResponse<Auction>)
+  })
+
+  // Search auctions
+  searchAuctions = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const filters: SearchFiltersRequest = (req as any).validatedQuery || req.query
+    const result = await this.auctionService.searchAuctions(filters)
+
+    res.status(200).json(result)
+  })
+
+  // Get auctions by seller
+  getSellerAuctions = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.userId) {
+      throw new AppError('User not authenticated', 401)
+    }
+
+    const { page = 1, limit = 20 } = req.query
+    const result = await this.auctionService.getAuctionsBySeller(
+      req.userId, 
+      Number(page), 
+      Number(limit)
+    )
+
+    res.status(200).json(result)
+  })
+
+  // Get auctions by specific seller (for public viewing)
+  getAuctionsBySeller = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const { sellerId } = req.params
+    const { page = 1, limit = 20 } = req.query
+    
+    if (!sellerId) {
+      throw new AppError('Seller ID is required', 400)
+    }
+    
+    const result = await this.auctionService.getAuctionsBySeller(
+      sellerId, 
+      Number(page), 
+      Number(limit)
+    )
+
+    res.status(200).json(result)
+  })
+
+  // Update auction
+  updateAuction = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.userId) {
+      throw new AppError('User not authenticated', 401)
+    }
+
+    const { id } = req.params
+    const updates = req.body
+
+    if (!id) {
+      throw new AppError('Auction ID is required', 400)
+    }
+
+    const auction = await this.auctionService.updateAuction(id, req.userId, updates)
+
+    res.status(200).json({
+      success: true,
+      message: 'Auction updated successfully',
+      data: auction
+    } as ApiResponse<Auction>)
+  })
+
+  // Delete auction
+  deleteAuction = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.userId) {
+      throw new AppError('User not authenticated', 401)
+    }
+
+    const { id } = req.params
+    
+    if (!id) {
+      throw new AppError('Auction ID is required', 400)
+    }
+    
+    await this.auctionService.deleteAuction(id, req.userId)
+
+    res.status(200).json({
+      success: true,
+      message: 'Auction deleted successfully'
+    } as ApiResponse)
+  })
+
+  // Activate auction (change status from draft to active)
+  activateAuction = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.userId) {
+      throw new AppError('User not authenticated', 401)
+    }
+
+    const { id } = req.params
+    
+    if (!id) {
+      throw new AppError('Auction ID is required', 400)
+    }
+    
+    const auction = await this.auctionService.activateAuction(id, req.userId)
+
+    res.status(200).json({
+      success: true,
+      message: 'Auction activated successfully',
+      data: auction
+    } as ApiResponse<Auction>)
+  })
+
+  // End auction manually
+  endAuction = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    if (!req.userId) {
+      throw new AppError('User not authenticated', 401)
+    }
+
+    const { id } = req.params
+    
+    if (!id) {
+      throw new AppError('Auction ID is required', 400)
+    }
+    
+    // First check if user owns the auction
+    const auction = await this.auctionService.getAuctionById(id)
+    if (!auction) {
+      throw new AppError('Auction not found', 404)
+    }
+
+    if (auction.seller_id !== req.userId && req.user?.role !== 'admin') {
+      throw new AppError('Not authorized to end this auction', 403)
+    }
+
+    const endedAuction = await this.auctionService.endAuction(id)
+
+    res.status(200).json({
+      success: true,
+      message: 'Auction ended successfully',
+      data: endedAuction
+    } as ApiResponse<Auction>)
+  })
+
+  // Get featured auctions
+  getFeaturedAuctions = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const { limit = 6 } = req.query
+    const auctions = await this.auctionService.getFeaturedAuctions(Number(limit))
+
+    res.status(200).json({
+      success: true,
+      data: auctions
+    } as ApiResponse<Auction[]>)
+  })
+
+  // Get ending auctions (for automated processing)
+  getEndingAuctions = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    // This endpoint should be protected and only accessible by admin or system
+    if (req.user?.role !== 'admin') {
+      throw new AppError('Not authorized', 403)
+    }
+
+    const auctions = await this.auctionService.getEndingAuctions()
+
+    res.status(200).json({
+      success: true,
+      data: auctions
+    } as ApiResponse<Auction[]>)
+  })
+}
