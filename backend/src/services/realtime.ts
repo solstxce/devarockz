@@ -40,6 +40,20 @@ export class RealTimeService {
     // Notify all users watching this auction
     this.io.to(`auction_${auctionId}`).emit('bid_placed', event)
 
+    // Notify the seller of the auction about the new bid
+    if (auction.seller_id) {
+      this.emitSellerNotification(auction.seller_id, {
+        id: '',
+        seller_id: auction.seller_id,
+        type: 'new_bid',
+        title: 'New Bid Received',
+        message: `New bid of $${bid.amount} placed on "${auction.title}"`,
+        auction_id: auctionId,
+        is_read: false,
+        created_at: new Date().toISOString()
+      })
+    }
+
     // Notify the previous highest bidder that they've been outbid
     if (bid.bidder_id !== auction.winner_id && auction.winner_id) {
       this.io.to(`user_${auction.winner_id}`).emit('outbid_notification', {
@@ -225,6 +239,47 @@ export class RealTimeService {
     }
 
     this.io.to(`user_${userId}`).emit('cart_updated', event)
+  }
+
+  // Seller Dashboard Events
+  public emitSellerStatsUpdated(sellerId: string, stats: any): void {
+    if (!this.io) return
+
+    const event = {
+      seller_id: sellerId,
+      stats
+    }
+
+    // Notify the specific seller
+    this.io.to(`user_${sellerId}`).emit('seller_stats_updated', event)
+    this.io.to(`seller_${sellerId}`).emit('seller_stats_updated', event)
+  }
+
+  public emitSellerListingUpdated(sellerId: string, listing: any, type: 'product' | 'auction'): void {
+    if (!this.io) return
+
+    const event = {
+      seller_id: sellerId,
+      listing,
+      type
+    }
+
+    // Notify the specific seller
+    this.io.to(`user_${sellerId}`).emit('seller_listing_updated', event)
+    this.io.to(`seller_${sellerId}`).emit('seller_listing_updated', event)
+  }
+
+  public emitSellerNotification(sellerId: string, notification: any): void {
+    if (!this.io) return
+
+    const event = {
+      seller_id: sellerId,
+      notification
+    }
+
+    // Notify the specific seller
+    this.io.to(`user_${sellerId}`).emit('seller_notification', event)
+    this.io.to(`seller_${sellerId}`).emit('seller_notification', event)
   }
 
   // General Notifications

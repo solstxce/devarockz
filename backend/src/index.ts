@@ -181,10 +181,22 @@ io.on('connection', (socket) => {
     console.log(`User ${socket.id} joined user room ${userId}`)
   })
 
+  // Join seller-specific room for seller notifications
+  socket.on('join_seller', (sellerId: string) => {
+    socket.join(`seller_${sellerId}`)
+    console.log(`User ${socket.id} joined seller room ${sellerId}`)
+  })
+
   // Leave user rooms
   socket.on('leave_user', (userId: string) => {
     socket.leave(`user_${userId}`)
     console.log(`User ${socket.id} left user room ${userId}`)
+  })
+
+  // Leave seller rooms
+  socket.on('leave_seller', (sellerId: string) => {
+    socket.leave(`seller_${sellerId}`)
+    console.log(`User ${socket.id} left seller room ${sellerId}`)
   })
 
   // Join category rooms for category-specific updates

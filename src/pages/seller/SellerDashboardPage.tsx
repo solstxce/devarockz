@@ -1,151 +1,176 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 import { useSellerAuth } from '@/hooks/useSellerAuth'
-import { Store, Package, DollarSign, Users, Plus, TrendingUp, Clock, Eye, Star, ArrowUpRight, AlertTriangle } from 'lucide-react'
+import { useSellerRealTime } from '@/hooks/useSellerRealTime'
+import { sellerDashboardService, type SellerStats } from '@/services/sellerDashboardService'
+import { Store, Package, DollarSign, Plus, TrendingUp, Clock, Eye, Star, ArrowUpRight, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { formatDistanceToNow } from 'date-fns'
 
 interface DashboardListing {
-  id: number
+  id: string
   title: string
-  currentBid: number
-  bids: number
-  views: number
-  timeLeft: string
+  currentBid?: number
+  price?: number
+  bids?: number
+  views?: number
+  timeLeft?: string
   status: string
-  image: string
+  image?: string
+  type: 'product' | 'auction'
+  created_at: string
+  end_time?: string
 }
 
-interface MonthlyPerformance {
-  month: string
-  sales: number
-  listings: number
-}
-
-interface Notification {
-  id: number
+interface SellerNotification {
+  id: string
+  seller_id: string
   type: string
+  title: string
   message: string
-  time: string
-  read: boolean
+  auction_id?: string
+  is_read: boolean
+  created_at: string
+  time?: string
 }
 
 interface DashboardData {
-  stats: {
-    activeListings: number
-    totalSales: number
-    customers: number
-    revenue: number
-  }
+  stats: SellerStats
   recentListings: DashboardListing[]
-  monthlyPerformance: MonthlyPerformance[]
-  notifications: Notification[]
+  notifications: SellerNotification[]
 }
 
 export function SellerDashboardPage() {
   const { getSellerUser } = useSellerAuth()
   const sellerAuth = getSellerUser()
   const [loading, setLoading] = useState(true)
-  const [dashboardData, setDashboardData] = useState<DashboardData>({
+  const [notifications, setNotifications] = useState<SellerNotification[]>([])
+  const initialLoadComplete = useRef(false)
+  
+  const [dashboardData, setDashboardData] = useState<Omit<DashboardData, 'notifications'>>({
     stats: {
-      activeListings: 0,
-      totalSales: 0,
-      customers: 0,
-      revenue: 0
+      total_products: 0,
+      active_products: 0,
+      total_auctions: 0,
+      active_auctions: 0,
+      total_orders: 0,
+      total_revenue: 0,
+      pending_orders: 0
     },
-    recentListings: [],
-    monthlyPerformance: [],
-    notifications: []
+    recentListings: []
+  })
+
+  // Handle real-time updates
+  const handleStatsUpdated = useCallback((stats: SellerStats | null) => {
+    if (stats) {
+      setDashboardData(prev => ({ ...prev, stats }))
+      toast.success('Dashboard updated!')
+    }
+    // Don't refetch on null - let the bid handler trigger refresh if needed
+  }, [])
+
+  const handleNewBid = useCallback((notification: SellerNotification) => {
+    // Add notification to the list
+    setNotifications(prev => [notification, ...prev.slice(0, 9)]) // Keep latest 10
+    
+    toast.success(`New bid received: ${notification.message}`)
+    
+    // Trigger a fresh stats fetch only if initial load is complete
+    if (sellerAuth && initialLoadComplete.current) {
+      sellerDashboardService.getSellerStats().then(result => {
+        if (result.success && result.data) {
+          setDashboardData(prev => ({ ...prev, stats: result.data! }))
+        }
+      }).catch(console.error)
+    }
+  }, [sellerAuth])
+
+  const handleNotification = useCallback((notification: SellerNotification) => {
+    setNotifications(prev => [notification, ...prev.slice(0, 9)])
+  }, [])
+
+  // Initialize real-time updates
+  useSellerRealTime({
+    onStatsUpdated: handleStatsUpdated,
+    onNewBid: handleNewBid,
+    onNotification: handleNotification
   })
 
   useEffect(() => {
-    // Simulate fetching real dashboard data
-    const fetchDashboardData = async () => {
+    const fetchData = async () => {
+      if (!sellerAuth || initialLoadComplete.current) return
+
       setLoading(true)
       try {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        console.log('[SellerDashboard] Fetching dashboard data...')
+        
+        const [statsResult, listingsResult] = await Promise.allSettled([
+          sellerDashboardService.getSellerStats(),
+          sellerDashboardService.getSellerListings({ limit: 10 })
+        ])
 
-        // Mock realistic data
+        const defaultStats = {
+          total_products: 0,
+          active_products: 0,
+          total_auctions: 0,
+          active_auctions: 0,
+          total_orders: 0,
+          total_revenue: 0,
+          pending_orders: 0
+        }
+        
+        let stats = defaultStats
+        let listings: DashboardListing[] = []
+
+        if (statsResult.status === 'fulfilled' && statsResult.value.success) {
+          stats = statsResult.value.data || defaultStats
+        } else {
+          console.warn('[SellerDashboard] Failed to fetch stats:', statsResult)
+        }
+
+        if (listingsResult.status === 'fulfilled' && listingsResult.value.success) {
+          const rawListings = Array.isArray(listingsResult.value.data) 
+            ? listingsResult.value.data 
+            : []
+          
+          listings = rawListings.map((listing: Record<string, unknown>) => ({
+            id: listing.id as string,
+            title: listing.title as string,
+            currentBid: listing.current_bid as number,
+            price: listing.price as number,
+            bids: (listing.total_bids as number) || 0,
+            views: Math.floor(Math.random() * 500) + 50, // Mock views for now
+            timeLeft: listing.end_time ? formatDistanceToNow(new Date(listing.end_time as string), { addSuffix: true }) : undefined,
+            status: listing.status as string,
+            image: (listing.images as string[])?.[0],
+            type: listing.type === 'auction' ? 'auction' as const : 'product' as const,
+            created_at: listing.created_at as string,
+            end_time: listing.end_time as string
+          }))
+        } else {
+          console.warn('[SellerDashboard] Failed to fetch listings:', listingsResult)
+        }
+
         setDashboardData({
-          stats: {
-            activeListings: Math.floor(Math.random() * 20) + 5,
-            totalSales: Math.floor(Math.random() * 5000) + 1000,
-            customers: Math.floor(Math.random() * 100) + 20,
-            revenue: Math.floor(Math.random() * 30) + 5
-          },
-          recentListings: [
-            {
-              id: 1,
-              title: 'Vintage Leica Camera M3',
-              currentBid: 1250,
-              bids: 15,
-              views: 245,
-              timeLeft: '2h 15m',
-              status: 'active',
-              image: '/api/placeholder/60/60'
-            },
-            {
-              id: 2,
-              title: 'Rolex Submariner Watch',
-              currentBid: 8500,
-              bids: 8,
-              views: 189,
-              timeLeft: '1d 4h',
-              status: 'active',
-              image: '/api/placeholder/60/60'
-            },
-            {
-              id: 3,
-              title: 'Rare Comic Book Collection',
-              currentBid: 320,
-              bids: 23,
-              views: 567,
-              timeLeft: '6h 30m',
-              status: 'active',
-              image: '/api/placeholder/60/60'
-            },
-            {
-              id: 4,
-              title: 'Antique Persian Rug',
-              currentBid: 2100,
-              bids: 5,
-              views: 134,
-              timeLeft: '3d 2h',
-              status: 'active',
-              image: '/api/placeholder/60/60'
-            }
-          ],
-          monthlyPerformance: [
-            { month: 'Jan', sales: 2800, listings: 12 },
-            { month: 'Feb', sales: 3200, listings: 15 },
-            { month: 'Mar', sales: 4100, listings: 18 },
-            { month: 'Apr', sales: 3800, listings: 16 },
-            { month: 'May', sales: 4500, listings: 20 },
-            { month: 'Jun', sales: 5200, listings: 22 }
-          ],
-          notifications: [
-            { id: 1, type: 'bid', message: 'New bid on Vintage Leica Camera', time: '2 min ago', read: false },
-            { id: 2, type: 'warning', message: 'Listing "Antique Persian Rug" expiring soon', time: '1 hour ago', read: false },
-            { id: 3, type: 'sale', message: 'Comic Book Collection sold for $320', time: '3 hours ago', read: true }
-          ]
+          stats,
+          recentListings: listings
         })
+
+        initialLoadComplete.current = true
+
       } catch (error) {
-        console.error('Error fetching dashboard data:', error)
+        console.error('[SellerDashboard] Error fetching dashboard data:', error)
+        toast.error('Failed to load dashboard data')
       } finally {
         setLoading(false)
       }
     }
 
-    fetchDashboardData()
-
-    // Refresh data every 30 seconds
-    const interval = setInterval(fetchDashboardData, 30000)
-    return () => clearInterval(interval)
-  }, [])
+    fetchData()
+  }, [sellerAuth])
 
   if (!sellerAuth) {
     return null // Should be handled by SellerProtectedRoute
@@ -155,32 +180,32 @@ export function SellerDashboardPage() {
 
   const stats = [
     {
-      label: 'Active Listings',
-      value: dashboardData.stats.activeListings.toString(),
+      label: 'Active Products',
+      value: dashboardData.stats.active_products.toString(),
       icon: Package,
       color: 'text-blue-600',
-      change: '+2 this week'
+      change: `+${dashboardData.stats.total_products - dashboardData.stats.active_products} inactive`
     },
     {
-      label: 'Total Sales',
-      value: `$${dashboardData.stats.totalSales.toLocaleString()}`,
+      label: 'Total Revenue',
+      value: `$${dashboardData.stats.total_revenue.toLocaleString()}`,
       icon: DollarSign,
       color: 'text-green-600',
-      change: '+12% this month'
+      change: `${dashboardData.stats.total_orders} orders`
     },
     {
-      label: 'Customers',
-      value: dashboardData.stats.customers.toString(),
-      icon: Users,
-      color: 'text-purple-600',
-      change: '+8 new customers'
-    },
-    {
-      label: 'Revenue Growth',
-      value: `+${dashboardData.stats.revenue}%`,
+      label: 'Active Auctions',
+      value: dashboardData.stats.active_auctions.toString(),
       icon: TrendingUp,
+      color: 'text-purple-600',
+      change: `${dashboardData.stats.total_auctions} total`
+    },
+    {
+      label: 'Pending Orders',
+      value: dashboardData.stats.pending_orders.toString(),
+      icon: Clock,
       color: 'text-orange-600',
-      change: 'vs last month'
+      change: 'Needs attention'
     }
   ]
 
@@ -274,7 +299,7 @@ export function SellerDashboardPage() {
                         <div className="flex items-center space-x-4 text-xs text-gray-600 mt-1">
                           <div className="flex items-center space-x-1">
                             <DollarSign className="w-3 h-3" />
-                            <span>${listing.currentBid.toLocaleString()}</span>
+                            <span>${(listing.currentBid || listing.price || 0).toLocaleString()}</span>
                           </div>
                           <div className="flex items-center space-x-1">
                             <Eye className="w-3 h-3" />
@@ -314,24 +339,28 @@ export function SellerDashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3 mb-6">
-                {dashboardData.notifications.map((notification) => (
+                {notifications.length > 0 ? notifications.map((notification) => (
                   <div key={notification.id} className={`p-3 rounded-lg border-l-4 ${
-                    notification.type === 'bid' ? 'border-blue-500 bg-blue-50' :
+                    notification.type === 'new_bid' ? 'border-blue-500 bg-blue-50' :
                     notification.type === 'warning' ? 'border-orange-500 bg-orange-50' :
                     'border-green-500 bg-green-50'
-                  } ${!notification.read ? 'font-medium' : ''}`}>
+                  } ${!notification.is_read ? 'font-medium' : ''}`}>
                     <div className="flex items-start space-x-2">
-                      {notification.type === 'bid' && <Star className="w-4 h-4 text-blue-500 mt-0.5" />}
+                      {notification.type === 'new_bid' && <Star className="w-4 h-4 text-blue-500 mt-0.5" />}
                       {notification.type === 'warning' && <AlertTriangle className="w-4 h-4 text-orange-500 mt-0.5" />}
                       {notification.type === 'sale' && <DollarSign className="w-4 h-4 text-green-500 mt-0.5" />}
                       <div className="flex-1">
                         <p className="text-sm">{notification.message}</p>
-                        <p className="text-xs text-gray-500 mt-1">{notification.time}</p>
+                        <p className="text-xs text-gray-500 mt-1">{notification.time || formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}</p>
                       </div>
-                      {!notification.read && <div className="w-2 h-2 bg-blue-500 rounded-full"></div>}
+                      {!notification.is_read && <div className="w-2 h-2 bg-blue-500 rounded-full"></div>}
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>No notifications yet</p>
+                  </div>
+                )}
               </div>
 
               <div className="border-t pt-4">
@@ -370,68 +399,6 @@ export function SellerDashboardPage() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Performance Overview */}
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <TrendingUp className="w-5 h-5 text-green-600" />
-              <span>Performance Overview</span>
-            </CardTitle>
-            <CardDescription>
-              Monthly sales and listing performance
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {dashboardData.monthlyPerformance[dashboardData.monthlyPerformance.length - 1]?.sales || 0}
-                  </div>
-                  <div className="text-sm text-gray-600">Current Month Sales</div>
-                  <div className="text-xs text-green-600">+15% from last month</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">
-                    {dashboardData.monthlyPerformance[dashboardData.monthlyPerformance.length - 1]?.listings || 0}
-                  </div>
-                  <div className="text-sm text-gray-600">Active Listings</div>
-                  <div className="text-xs text-green-600">+3 new this week</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">94%</div>
-                  <div className="text-sm text-gray-600">Success Rate</div>
-                  <div className="text-xs text-gray-500">Above average</div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="font-medium">Monthly Trend</h4>
-                <div className="space-y-3">
-                  {dashboardData.monthlyPerformance.map((month) => {
-                    const maxValue = Math.max(...dashboardData.monthlyPerformance.map(m => m.sales))
-                    const percentage = (month.sales / maxValue) * 100
-                    return (
-                      <div key={month.month} className="flex items-center space-x-4">
-                        <div className="w-12 text-sm text-gray-600">{month.month}</div>
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2">
-                            <Progress value={percentage} className="h-2" />
-                            <span className="text-sm font-medium">${month.sales.toLocaleString()}</span>
-                          </div>
-                        </div>
-                        <div className="w-16 text-sm text-gray-500 text-right">
-                          {month.listings} listings
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Business Info */}
         <Card className="mt-8">

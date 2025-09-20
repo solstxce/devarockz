@@ -1,4 +1,5 @@
 import { supabase } from './database'
+import { RealTimeService } from './realtime'
 import type { Bid, PlaceBidRequest, Auction, ApiResponse } from '@/types'
 
 export class BiddingService {
@@ -97,6 +98,15 @@ export class BiddingService {
     if (updateError || !updatedAuction) {
       throw new Error('Failed to get updated auction')
     }
+
+    // Emit real-time events
+    const realTimeService = RealTimeService.getInstance()
+    
+    // Emit bid placed event to all watchers of this auction
+    realTimeService.emitBidPlaced(auction_id, bid, updatedAuction)
+    
+    // Update seller statistics
+    realTimeService.emitSellerStatsUpdated(auction.seller_id, null) // null triggers refetch
 
     return { bid, auction: updatedAuction }
   }
