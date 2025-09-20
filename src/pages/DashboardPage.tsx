@@ -46,6 +46,21 @@ export function DashboardPage() {
     fetchDashboardData()
   }, [fetchDashboardData])
 
+  // Listen for bid placement events to refresh dashboard
+  useEffect(() => {
+    const handleBidPlaced = () => {
+      console.log('[Dashboard] Bid placed event detected, refreshing dashboard...')
+      fetchDashboardData()
+    }
+
+    // Listen for custom bid placed events
+    window.addEventListener('bidPlaced', handleBidPlaced)
+    
+    return () => {
+      window.removeEventListener('bidPlaced', handleBidPlaced)
+    }
+  }, [fetchDashboardData])
+
   const handleRefresh = () => {
     fetchDashboardData()
     toast.success('Dashboard refreshed')

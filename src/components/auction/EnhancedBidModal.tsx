@@ -15,9 +15,9 @@ import { Badge } from '@/components/ui/badge'
 import { Gavel, AlertTriangle, TrendingUp, Clock, History, User } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import type { Auction, Bid } from '@/lib/supabase'
-import { biddingService } from '../../services/biddingService'
+import { biddingService } from '@/services/biddingService'
 
-interface BidConfirmationModalProps {
+interface EnhancedBidModalProps {
   auction: Auction | null
   isOpen: boolean
   onClose: () => void
@@ -25,13 +25,13 @@ interface BidConfirmationModalProps {
   isSubmitting?: boolean
 }
 
-export function BidConfirmationModal({
+export function EnhancedBidModal({
   auction,
   isOpen,
   onClose,
   onConfirmBid,
   isSubmitting = false
-}: BidConfirmationModalProps) {
+}: EnhancedBidModalProps) {
   const [bidAmount, setBidAmount] = useState('')
   const [error, setError] = useState('')
   const [bidHistory, setBidHistory] = useState<Bid[]>([])
@@ -112,7 +112,7 @@ export function BidConfirmationModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
             <Gavel className="w-5 h-5 text-blue-600" />
@@ -128,80 +128,77 @@ export function BidConfirmationModal({
           <div className="space-y-4">
             {/* Current Auction Info */}
             <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Current Bid:</span>
-              <span className="font-semibold text-lg text-green-600">
-                ${currentBid.toFixed(2)}
-              </span>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Current Bid:</span>
+                <span className="font-semibold text-lg text-green-600">
+                  ${currentBid.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Minimum Bid:</span>
+                <span className="font-medium text-blue-600">
+                  ${minimumBid.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Your Bid:</span>
+                <span className="font-bold text-xl text-gray-900">
+                  ${enteredBid > 0 ? enteredBid.toFixed(2) : '0.00'}
+                </span>
+              </div>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Minimum Bid:</span>
-              <span className="font-medium text-blue-600">
-                ${minimumBid.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Your Max Bid:</span>
-              <span className="font-bold text-xl text-gray-900">
-                ${enteredBid > 0 ? enteredBid.toFixed(2) : '0.00'}
-              </span>
-            </div>
-          </div>
 
-          {/* Bid Input */}
-          <div className="space-y-2">
-            <Label htmlFor="bidAmount">Your Bid Amount ($)</Label>
-            <Input
-              id="bidAmount"
-              type="number"
-              placeholder={`Min: $${minimumBid.toFixed(2)}`}
-              value={bidAmount}
-              onChange={(e) => {
-                setBidAmount(e.target.value)
-                setError('')
-              }}
-              min={minimumBid}
-              step={auction.bid_increment}
-              disabled={isSubmitting}
-              className={error ? 'border-red-500' : ''}
-            />
-            {error && (
-              <p className="text-sm text-red-600">{error}</p>
+            {/* Bid Input */}
+            <div className="space-y-2">
+              <Label htmlFor="bidAmount">Your Bid Amount ($)</Label>
+              <Input
+                id="bidAmount"
+                type="number"
+                placeholder={`Min: $${minimumBid.toFixed(2)}`}
+                value={bidAmount}
+                onChange={(e) => {
+                  setBidAmount(e.target.value)
+                  setError('')
+                }}
+                min={minimumBid}
+                step={auction.bid_increment}
+                disabled={isSubmitting}
+                className={error ? 'border-red-500' : ''}
+              />
+              {error && (
+                <p className="text-sm text-red-600">{error}</p>
+              )}
+            </div>
+
+            {/* Bid Analysis */}
+            {enteredBid > 0 && (
+              <div className="bg-blue-50 p-4 rounded-lg space-y-2">
+                <div className="flex items-center space-x-2">
+                  <TrendingUp className="w-4 h-4 text-blue-600" />
+                  <span className="font-medium text-blue-900">Bid Analysis</span>
+                </div>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span>Increase from current:</span>
+                    <span className="font-medium">+${bidIncrease.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Bid increment:</span>
+                    <span>${auction.bid_increment.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
             )}
-          </div>
 
-          {/* Bid Analysis */}
-          {enteredBid > 0 && isBidValid && (
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <div className="flex items-center space-x-2 mb-2">
-                <TrendingUp className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-900">Bid Analysis</span>
-              </div>
-              <div className="text-sm text-blue-800 space-y-1">
-                <div>• You're bidding ${bidIncrease.toFixed(2)} above current bid</div>
-                <div>• This is {((bidIncrease / auction.bid_increment)).toFixed(1)}x the minimum increment</div>
-                <div>• Winning chance: {enteredBid > currentBid * 1.1 ? 'High' : enteredBid > currentBid * 1.05 ? 'Medium' : 'Low'}</div>
-              </div>
-            </div>
-          )}
-
-          {/* Time Warning */}
-          <Alert>
-            <Clock className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Time sensitive:</strong> This auction may end soon. Other bidders might place bids while you're deciding.
-            </AlertDescription>
-          </Alert>
-
-          {/* High Bid Warning */}
-          {enteredBid > currentBid * 2 && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>High bid warning:</strong> Your bid is significantly higher than the current bid. Please verify the amount.
-              </AlertDescription>
-            </Alert>
-          )}
+            {/* High bid warning */}
+            {enteredBid > currentBid + 1000 && (
+              <Alert className="border-yellow-500 bg-yellow-50">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <AlertDescription>
+                  <strong>High bid warning:</strong> Your bid is significantly higher than the current bid. Please verify the amount.
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
 
           {/* Right Column - Bid History */}
@@ -217,7 +214,7 @@ export function BidConfirmationModal({
                 <span className="ml-2 text-sm text-gray-600">Loading bid history...</span>
               </div>
             ) : bidHistory.length > 0 ? (
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
                 {bidHistory.map((bid, index) => (
                   <div key={bid.id} className="bg-white border rounded-lg p-3 space-y-1">
                     <div className="flex justify-between items-center">

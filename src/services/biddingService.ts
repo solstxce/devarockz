@@ -90,7 +90,7 @@ class BiddingService {
   // Get user's bid history
   async getUserBids(): Promise<ApiResponse<BidHistory[]>> {
     try {
-      return await apiClient.get<BidHistory[]>('/bids/my-bids')
+      return await apiClient.get<BidHistory[]>('/bids/my/bids')
     } catch (error) {
       console.error('Error fetching user bids:', error)
       return {
@@ -103,7 +103,7 @@ class BiddingService {
   // Get user's active bids (where they're currently winning or have active bids)
   async getActiveBids(): Promise<ApiResponse<BidHistory[]>> {
     try {
-      return await apiClient.get<BidHistory[]>('/bids/active')
+      return await apiClient.get<BidHistory[]>('/bids/my/active')
     } catch (error) {
       console.error('Error fetching active bids:', error)
       return {

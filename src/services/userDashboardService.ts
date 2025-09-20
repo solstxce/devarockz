@@ -169,9 +169,12 @@ class UserDashboardService {
   // Get user's active bids
   async getUserActiveBids(): Promise<ApiResponse<UserBidSummary[]>> {
     try {
+      console.log('[UserDashboard] Fetching user active bids from /bids/my/active')
       const response = await apiClient.get<BidWithAuction[]>('/bids/my/active')
+      console.log('[UserDashboard] Active bids response:', response)
       
       if (response.success && response.data) {
+        console.log('[UserDashboard] Raw bid data:', response.data)
         // Transform backend data to frontend format
         const transformedData: UserBidSummary[] = response.data.map((bid: BidWithAuction) => ({
           auction_id: bid.auction?.id || bid.auction_id,
@@ -184,18 +187,20 @@ class UserDashboardService {
           is_winning: bid.amount >= (bid.auction?.current_bid || 0)
         }))
         
+        console.log('[UserDashboard] Transformed bid data:', transformedData)
         return {
           success: true,
           data: transformedData
         }
       }
       
+      console.warn('[UserDashboard] Active bids response unsuccessful or no data')
       return {
         success: false,
         error: 'Failed to fetch active bids'
       }
     } catch (error) {
-      console.error('Error fetching active bids:', error)
+      console.error('[UserDashboard] Error fetching active bids:', error)
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to fetch active bids'

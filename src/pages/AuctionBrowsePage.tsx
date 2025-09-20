@@ -8,7 +8,7 @@ import { AuthPromptModal } from '@/components/auth/AuthPromptModal'
 import { AuctionDetailModal } from '@/components/auction/AuctionDetailModal'
 import { BidConfirmationModal } from '@/components/auction/BidConfirmationModal'
 import { auctionService, type AuctionFilters } from '@/services/auctionService'
-import { biddingService } from '@/services/biddingService'
+import { biddingService } from '../services/biddingService'
 import { categoryService } from '@/services/categoryService'
 import { useRealTime } from '@/hooks/useRealTime'
 import { useAuth } from '@/hooks/useAuth'
@@ -221,6 +221,12 @@ export function AuctionBrowsePage() {
         
         toast.success(`Bid of $${bidAmount.toFixed(2)} placed successfully!`)
         setBidConfirmationModal({ isOpen: false, auction: null })
+        
+        // Dispatch event to notify dashboard of successful bid placement
+        const bidPlacedEvent = new CustomEvent('bidPlaced', {
+          detail: { auctionId: bidConfirmationModal.auction.id, amount: bidAmount }
+        })
+        window.dispatchEvent(bidPlacedEvent)
       } else {
         throw new Error(bidResult.error || 'Failed to place bid')
       }

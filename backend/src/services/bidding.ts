@@ -148,7 +148,7 @@ export class BiddingService {
           end_time,
           status,
           images,
-          seller:users(id, full_name)
+          seller:users!auctions_seller_id_fkey(id, full_name)
         )
       `, { count: 'exact' })
       .eq('bidder_id', userId)
@@ -189,7 +189,7 @@ export class BiddingService {
           status,
           images,
           total_bids,
-          seller:users(id, full_name)
+          seller:users!auctions_seller_id_fkey(id, full_name)
         )
       `)
       .eq('bidder_id', userId)
@@ -212,7 +212,7 @@ export class BiddingService {
       .from('auctions')
       .select(`
         *,
-        seller:users(id, full_name, email, phone),
+        seller:users!auctions_seller_id_fkey(id, full_name, email, phone),
         category:categories(*)
       `, { count: 'exact' })
       .eq('winner_id', userId)
